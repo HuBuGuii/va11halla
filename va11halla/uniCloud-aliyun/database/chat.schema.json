@@ -1,0 +1,44 @@
+// 文档教程: https://uniapp.dcloud.net.cn/uniCloud/schema
+{
+	"bsonType": "object",
+	"required": [],
+	"permission": {
+		"read": false,
+		"create": false,
+		"update": false,
+		"delete": false
+	},
+	"properties": {
+		"_id": {
+			"description": "消息ID，系统自动生成"
+		},
+		"nickname": {
+			"bsonType": "string",
+			"description": "用户的名字"
+		},
+		"user_id": {
+			"bsonType": "string",
+			"description": "用户id",
+			"foreignKey": "uni-id-users._id"
+		},
+		"session_id": {
+			"bsonType": "string",
+			"description": "会话id",
+			"foreignKey": "session._id"
+		},
+		"role": {
+			"bsonType": "string",
+			"description": "确认是机器人还是用户"
+		},
+		"content": {
+			"bsonType": "string",
+			"description": "消息的具体内容"
+		},
+		"created_at": {
+			"bsonType": "timestamp",
+			"description": "记录创建时间"
+		}
+
+
+	}
+}
