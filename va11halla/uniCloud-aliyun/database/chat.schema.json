@@ -3,10 +3,10 @@
 	"bsonType": "object",
 	"required": [],
 	"permission": {
-		"read": false,
-		"create": false,
-		"update": false,
-		"delete": false
+		"read": true,
+		"create": true,
+		"update": true,
+		"delete": true
 	},
 	"properties": {
 		"_id": {
@@ -28,7 +28,7 @@
 		},
 		"role": {
 			"bsonType": "string",
-			"description": "确认是机器人还是用户"
+			"description": "确认role"
 		},
 		"content": {
 			"bsonType": "string",

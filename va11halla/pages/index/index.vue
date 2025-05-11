@@ -42,7 +42,7 @@
 		{
 			name: "AI助手",
 			icon: "/static/icons/chat.png",
-			url: "/pages/chat/deepseek",
+			url: "/pages/chat/index",
 			tag: "NEW",
 		},
 		{

@@ -1,12 +1,11 @@
-// 文档教程: https://uniapp.dcloud.net.cn/uniCloud/schema
 {
 	"bsonType": "object",
 	"required": [],
 	"permission": {
-		"read": false,
-		"create": false,
-		"update": false,
-		"delete": false
+		"read": true,
+		"create": true,
+		"update": true,
+		"delete": true
 	},
 	"properties": {
 		"_id": {
@@ -20,6 +19,18 @@
 			"bsonType": "string",
 			"description": "用户id",
 			"foreignKey": "uni-id-users._id"
+		},
+		"systemText": {
+			"bsonType": "string",
+			"description": "自定义提示词"
+		},
+		"showPub": {
+			"bsonType": "string",
+			"description": "用户所选隐私性"
+		},
+		"avatar": {
+			"bsonType": "string",
+			"description": "上传的chat头像"
 		},
 		"title": {
 			"bsonType": "string",

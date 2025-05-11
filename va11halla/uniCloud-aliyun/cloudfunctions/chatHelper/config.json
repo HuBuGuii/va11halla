@@ -1,0 +1,4 @@
+{
+	"isCloudObject": true, // 声明这是一个云对象
+	"isAuth": true // 启用身份校验（自动解析 uni_id_token）
+}

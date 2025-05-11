@@ -117,6 +117,13 @@
 			"style": {
 				"navigationBarTitleText": "deepseek"
 			}
+		},
+		{
+			"path" : "pages/chat/index",
+			"style" : 
+			{
+				"navigationBarTitleText" : "ai聊天小助手"
+			}
 		}
 	],
 	"globalStyle": {
