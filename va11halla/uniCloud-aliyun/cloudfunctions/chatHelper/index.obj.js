@@ -7,43 +7,62 @@ module.exports = {
       clientInfo,
     });
   },
-  async send(messages) {
-    try {
-      const res = await uniCloud.httpclient.request(
-        "https://api.siliconflow.cn/v1/chat/completions",
-        {
-          method: "POST",
-          dataType: "json", // 自动解析 JSON 返回
-          contentType: "json", // 设置请求体为 application/json
-          data: {
-            model: "deepseek-ai/DeepSeek-R1",
-            messages,
-            stream: false,
-            max_tokens: 512,
-            temperature: 0.7,
-            top_p: 0.7,
-            top_k: 50,
-            frequency_penalty: 0.5,
-            n: 1,
-            response_format: {
-              type: "text",
-            },
-          },
-          headers: {
-            Authorization:
-              "Bearer sk-lgquhuftllbtjnwauywqnmwujsowlkrlddgyovlevkbmnxxj",
-            Accept: "application/json",
-            "Content-Type": "application/json",
-          },
-        }
-      );
+  async saveMessage({ session_id, role, content }) {
+    const dbJql = uniCloud.databaseForJQL({
+      clientInfo: this.getClientInfo(),
+    });
+    const timestamp = Date.now();
 
-      const reply = res.data?.choices?.[0]?.message?.content || "AI 无回复";
-      return res;
-    } catch (err) {
-      console.error("[请求失败]", err);
-      return "请求发生错误，请稍后再试";
-    }
+    await dbJql.collection("chat").add({
+      session_id,
+      role,
+      content,
+      created_at: timestamp,
+    });
+
+    return { code: 0, msg: "ok" };
+  },
+  async getSessions(uid) {
+    const dbJql = uniCloud.databaseForJQL({
+      clientInfo: this.getClientInfo(),
+    });
+    const sessions = await dbJql
+      .collection("session")
+      .where({ user_id: uid })
+      .get();
+    const data = sessions.data;
+    const reply = data.map((item) => ({
+      id: item._id,
+      title: item.title,
+      avatar: item.avatar,
+    }));
+
+    return reply.reverse();
+  },
+  async getPrompt(session_id) {
+    const dbJql = uniCloud.databaseForJQL({
+      clientInfo: this.getClientInfo(),
+    });
+    const res = await dbJql.collection("chat").doc(session_id).get();
+
+    console.log(res);
+  },
+  async getMessages({ session_id, limit = 20 }) {
+    const dbJql = uniCloud.databaseForJQL({
+      clientInfo: this.getClientInfo(),
+    });
+    const res = await dbJql
+      .collection("chat")
+      .where({ session_id })
+      .orderBy("created_at", "desc")
+      .limit(limit)
+      .get();
+
+    // 返回升序排列
+    return {
+      code: 0,
+      messages: res.data.reverse(),
+    };
   },
   async createSession(title, systemText, showPub, avatar) {
     const dbJql = uniCloud.databaseForJQL({
@@ -51,18 +70,12 @@ module.exports = {
     });
 
     const clientInfo = this.getClientInfo();
-
     const token = clientInfo.uniIdToken;
-
     const tokenValid = await this.uniId.checkToken(token);
-
     const user_id = tokenValid.uid;
-
     const userdb = dbJql.collection("uni-id-users");
-
     const userRes = await userdb.doc(user_id).get();
-
-    const nickname = userRes.data[0]?.nickname;
+    const nickname = userRes.data[0]?.nickname; //已经写了的方法就不改了，解析token得到uid太繁琐了，官方还提供了个API叫uniCloud.getCurrentUserInfo(),但很奇怪叫unicloud却只能在前端调用，可以直接得到uid，再传到函数
 
     await dbJql.collection("session").add({
       user_id,
@@ -112,5 +125,37 @@ Jill 是个“很酷的调酒师”，但她一直强调自己并没有刻意装
       title: title || "Jill",
       created_at: Date.now(),
     });
+  },
+  async copySession(inid) {
+    
+    const id = String(inid)
+    const dbJql = uniCloud.databaseForJQL({
+      clientInfo: this.getClientInfo(),
+    });
+
+    const clientInfo = this.getClientInfo();
+    const token = clientInfo.uniIdToken;
+    const tokenValid = await this.uniId.checkToken(token);
+    const user_id = tokenValid.uid;
+    const userdb = dbJql.collection("uni-id-users");
+    const userRes = await userdb.doc(user_id).get();
+    const nickname = userRes.data[0]?.nickname;
+
+    const session1 = await dbJql.collection("session").doc(id).get();
+    const session = session1.data?.[0];
+
+    const copyRes = await dbJql.collection("session").add({
+      user_id,
+      belong: nickname,
+      systemText: session.systemText,
+      showPub: "private",
+      avatar: session.avatar,
+      title: session.title,
+      created_at: Date.now(),
+    });
+    const toId = copyRes.id
+    return toId 
+
+    
   },
 };
