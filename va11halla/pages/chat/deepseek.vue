@@ -1,223 +1,333 @@
 <template>
   <view class="chat-page">
-    <view class="buttons"><button
-      @click="clickB"
-    >
-      测试按钮
-    </button></view>
+    <!-- 自定义导航栏 -->
+    <view class="nav-bar">
+      <view class="back-btn" @click="goBack">
+        <uni-icons type="left" size="24" color="#333"></uni-icons>
+      </view>
+      <text class="title"><text class="now">当前聊天： </text>{{ title }}</text>
+      <view class="setting-btn" @click="openSettings">
+        <uni-icons type="settings" size="24" color="#333" />
+      </view>
+    </view>
+    <!-- 消息列表区域 -->
     <scroll-view scroll-y class="message-list" :scroll-top="scrollTop">
       <view
         v-for="(msg, index) in messages"
         :key="index"
         class="message-item"
-        :class="msg.role"
+        :class="msg.role === 'user' ? 'user' : 'assistant'"
       >
-        <text>{{ msg.role === "user" ? "👤" : "🤖" }} {{ msg.content }}</text>
+        <image
+          class="avatar"
+          :src="msg.role === 'user' ? userAvatar : botAvatar"
+        />
+        <view class="bubble">
+          {{ msg.content }}
+        </view>
       </view>
     </scroll-view>
-
+    
+    <!-- 输入区域 -->
     <view class="input-area">
       <input
         v-model="inputText"
         class="input"
         placeholder="请输入你的问题..."
+        :focus="inputFocused"
         @confirm="sendMessage"
       />
       <button class="send-btn" @click="sendMessage">发送</button>
     </view>
   </view>
+  
 </template>
 
-<script setup>
-import { ref, reactive, nextTick } from "vue";
-import { onLoad } from '@dcloudio/uni-app'
+<script setup lang="ts">
+import { ref, nextTick, watch } from "vue";
+import { onLoad } from "@dcloudio/uni-app";
+
+interface message {
+  role: string;
+  content: string;
+}
 
 const inputText = ref("");
-const messages = ref([]);
+const messages = ref<message[]>([]);
 const scrollTop = ref(0);
+const prompt = ref("");
+const userAvatar = ref(
+  "https://mp-9aad41c1-5f10-47f1-8cb2-df81014d15d2.cdn.bspapp.com/cloudstorage/%23TimBeta.jpg"
+); // 用户头像
+const botAvatar = ref("");
+const inputFocused = ref(true);
 const chatHelper = uniCloud.importObject("chatHelper");
 const session_id = ref("");
-const userInput = ref("");
-const systemPrompt = ref({})
-const localMessages = ref([]);
+const modelName = ref("deepseek-ai/DeepSeek-V3"); // 或 deepseek-ai/DeepSeek-V3
+const title = ref("");
 
 onLoad(async (options) => {
-  const title = options.title
-  uni.setNavigationBarTitle({ title: title })
-  const id = options.id
-  session_id.value = id;
-  console.log(id)
-  const cloudMes = chatHelper.getMessages({ id });
-  if (cloudMes.length > 0) {
-  }
+  title.value = options.title || "聊天";
+  uni.setNavigationBarTitle({ title });
+  session_id.value = options.id;
+  botAvatar.value = options.avatar;
+
+  prompt.value = await chatHelper.getPrompt(session_id.value);
 });
 
-const handleSend = async () => {
-  const content = inputText.value.trim();
-  if (!content) return;
-
-  localMessages.value.push({
-    role: "user",
-    content,
-  });
-
-  inputText.value = "";
-
-  chatHelper.saveMessage({ session_id, role: "user", content });
-
-  const gptReply = await callGpt(localMessages.value)
-
-
-};
-
-const callGpt = async(messages) => {
-  try {
-    const res = await uni.request({
-  url: 'https://api.siliconflow.cn/v1/chat/completions',
-  method: 'POST',
-  dataType: 'json',
-  header: {
-    Authorization: 'Bearer sk-lgquhuftllbtjnwauywqnmwujsowlkrlddgyovlevkbmnxxj',
-    Accept: 'application/json',
-    'Content-Type': 'application/json'
-  },
-  data: {
-    model: 'deepseek-ai/DeepSeek-R1',
-    messages,
-    stream: false,
-    max_tokens: 512,
-    temperature: 0.7,
-    top_p: 0.7,
-    top_k: 50,
-    frequency_penalty: 0.5,
-    n: 1,
-    response_format: {
-      type: 'text'
-    }
-  }
-})
-
-console.log('GPT 返回结果：', res.data)
-  } catch (error) {
-console.log("error",error)
-  }
-}
 // 滚动到底部
 const scrollToBottom = () => {
   nextTick(() => {
-    scrollTop.value = Math.random() * 1000000; // 随机值强制触发滚动
+    scrollTop.value = Math.random() * 1000000;
   });
 };
 
-const mockDeepSeekReply = async (question) => {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve(`你刚才问的是「${question}」，这是 DeepSeek 的回答。`);
-    }, 10);
-  });
-};
+const openSettings = () => {
 
-
+}
 
 const sendMessage = async () => {
   const text = inputText.value.trim();
   if (!text) return;
 
+  inputFocused.value = false;
+  // 添加用户消息
   messages.value.push({ role: "user", content: text });
   inputText.value = "";
   scrollToBottom();
 
-  messages.value.push({ role: "bot", content: "正在思考中..." });
+  // 添加机器人“思考中”
+  messages.value.push({ role: "assistant", content: "正在思考中..." });
   scrollToBottom();
 
-  const reply = await chatHelper.send(text);
-  messages[messages.length - 1] = { role: "bot", content: reply };
+  // 模拟接口回复
+  const reply = await sendMessageToGPT(messages.value);
+  messages.value[messages.value.length - 1] = {
+    role: "assistant",
+    content: reply,
+  };
   scrollToBottom();
+
+  nextTick(() => {
+    inputFocused.value = true;
+  });
 };
 
-const clickB = async() => {
-  const info =  uniCloud.getCurrentUserInfo()
-  const uid = info.uid
-  console.log(uid)
-  const reply = await chatHelper.getSessions(uid)
-  console.log("reply is ===",reply);
-  
-}
+const sendMessageToGPT = async (messages: any[]) => {
+  let sendMes = [
+    { role: "system", content: prompt.value },
+    ...messages.slice(0, -1).map((m) => ({
+      role: m.role,
+      content:
+        typeof m.content === "object" && m.content.value !== undefined
+          ? m.content.value
+          : m.content,
+    })),
+  ];
+  console.log(sendMes);
+  try {
+    const res = await uni.request({
+      url: "https://api.siliconflow.cn/v1/chat/completions",
+      method: "POST",
+      header: {
+        Authorization:
+          "Bearer sk-lgquhuftllbtjnwauywqnmwujsowlkrlddgyovlevkbmnxxj",
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      data: {
+        model: modelName.value,
+        messages: sendMes,
+        stream: false,
+        max_tokens: 512,
+        temperature: 0.7,
+        top_p: 0.7,
+        top_k: 50,
+        frequency_penalty: 0.5,
+        n: 1,
+        response_format: {
+          type: "text",
+        },
+      },
+    });
+
+    const reply = res.data?.choices?.[0]?.message?.content || "AI 无回复";
+    return reply;
+  } catch (err) {
+    console.error("[请求失败]", err);
+    return "请求失败，请稍后再试";
+  }
+};
+
+const goBack = () => {
+  uni.navigateBack({ delta: 1 });
+};
+
+watch(
+  messages,
+  (newVal) => {
+    console.log("新的messages是", newVal);
+  },
+  {
+    deep: true,
+  }
+);
 </script>
 
 <style scoped lang="scss">
-/* 全局禁用滚动 */
+$milky-white: #f8f4ff;
+$soft-blue: #d6e4ff;
+$lavender: #e8d7ff;
+$dreamy-purple: #c19eff;
+$pink-accent: #ffd6e7;
+$text-dark: #5a4b6d;
+
 page {
-  overflow: hidden;
-  height: 100%;
+  height: 100vh;
+  background-color: $milky-white;
+  font-family: "PingFang SC", "Helvetica Neue", sans-serif;
 }
 
 .chat-page {
   display: flex;
   flex-direction: column;
-  height: 100vh;
-  /* 在 uni-app 中可能需要使用 100% 而不是 vh */
   height: 100%;
-}
+  background: linear-gradient(
+    180deg,
+    $milky-white 0%,
+    rgba($lavender, 0.1) 100%
+  );
+  overflow: hidden;
 
-.message-list {
-  flex: 1;
-  padding: 16rpx;
-  /* 移除 overflow-y: scroll，因为 scroll-view 已经处理 */
-  background-color: #f5f5f5;
-  /* 确保内容不会溢出 */
-  box-sizing: border-box;
+  .nav-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    height: 88rpx;
+    padding: 0 32rpx;
+    background-color: rgba($milky-white, 0.9);
+    border-bottom: 2rpx solid rgba($lavender, 0.3);
+    backdrop-filter: blur(10rpx);
+    flex-shrink: 0;
 
-  /* 解决 iOS 滚动卡顿 */
-  -webkit-overflow-scrolling: touch;
-}
+    .title {
+      font-size: larger;
+      color: $text-dark;
+      font-weight: 500;
+      .now {
+        font-size: large;
+      }
+    }
+  }
 
-.message-item {
-  margin-bottom: 12rpx;
-  line-height: 1.6;
-  word-break: break-word; /* 长文本自动换行 */
-}
+  .message-list {
+    flex: 1;
+    padding: 20rpx 32rpx;
+    overflow-y: scroll;
+    background-color: transparent;
 
-.message-item.user {
-  text-align: right;
-  color: #333;
-}
+    // 隐藏滚动条
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    &::-webkit-scrollbar {
+      display: none;
+    }
 
-.message-item.bot {
-  text-align: left;
-  color: #007aff;
-}
+    .message-item {
+      display: flex;
+      align-items: flex-start;
+      margin-bottom: 40rpx;
 
-.input-area {
-  padding: 20rpx;
-  display: flex;
-  border-top: 1px solid #ddd;
-  background-color: #fff;
-  /* 防止键盘弹出时被挤压 */
-  position: sticky;
-  bottom: 0;
-}
+      &.user {
+        flex-direction: row-reverse;
 
-.input {
-  padding-left: 20rpx;
-  height: 80%;
-  flex: 1;
-  border: 1px solid #ccc;
-  border-radius: 8rpx;
-}
+        .bubble {
+          background: linear-gradient(135deg, #cbdcff, #bcd7ff);
+          color: #2c3440;
+          box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.05);
+        }
+      }
 
-.send-btn {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 80%;
-  margin-left: 15rpx;
-  padding: 0 16rpx;
-  background-color: #266bb4;
-  color: white;
-  border-radius: 8rpx;
-  /* 移除默认按钮样式 */
-  border: none;
-  outline: none;
+      &.assistant {
+        .bubble {
+          background: linear-gradient(135deg, #ecdfff, #e6d8ff);
+          color: #3a2e4f;
+          box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.05);
+        }
+      }
+
+      .avatar {
+        width: 80rpx;
+        height: 80rpx;
+        border-radius: 50%;
+        margin: 0 20rpx;
+        border: 2rpx solid rgba($lavender, 0.3);
+      }
+
+      .bubble {
+        max-width: 70%;
+        padding: 24rpx 32rpx;
+        border-radius: 24rpx;
+        font-size: 28rpx;
+        line-height: 1.6;
+        word-break: break-word;
+        box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.06);
+        position: relative;
+        border: 1rpx solid rgba(0, 0, 0, 0.04);
+
+        &::after {
+          content: "";
+          position: absolute;
+          top: 20rpx;
+          width: 0;
+          height: 0;
+          border: 12rpx solid transparent;
+        }
+      }
+    }
+  }
+
+  .input-area {
+    display: flex;
+    padding: 24rpx 32rpx;
+    border-top: 2rpx solid rgba($lavender, 0.2);
+    background-color: rgba($milky-white, 0.9);
+    backdrop-filter: blur(20rpx);
+
+    .input {
+      flex: 1;
+      height: 88rpx;
+      padding: 0 32rpx;
+      background: rgba(white, 0.9);
+      border: 2rpx solid rgba($lavender, 0.3);
+      border-radius: 20rpx;
+      color: $text-dark;
+      font-size: 28rpx;
+      transition: all 0.3s;
+
+      &:focus {
+        border-color: $soft-blue;
+        box-shadow: 0 0 20rpx rgba($soft-blue, 0.2);
+      }
+    }
+
+    .send-btn {
+      margin-left: 24rpx;
+      padding: 0 40rpx;
+      height: 88rpx;
+      line-height: 88rpx;
+      background-image: linear-gradient(135deg, $soft-blue, $lavender);
+      color: white;
+      font-size: 28rpx;
+      border-radius: 20rpx;
+      border: none;
+      transition: all 0.3s;
+
+      &:active {
+        opacity: 0.8;
+        transform: scale(0.98);
+      }
+    }
+  }
 }
 </style>

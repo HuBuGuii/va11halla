@@ -219,7 +219,7 @@
 			"title": "密码",
 			"trim": "both",
 			"permission": {
-				"read": true
+				"read": truen
 			}
 		},
 		"password_secret_version": {
