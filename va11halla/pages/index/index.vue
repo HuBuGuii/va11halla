@@ -1,37 +1,42 @@
 <template>
-	<view class="index">
-		<view class="graph"></view>
-		<view class="container">
-			<!-- 顶部 Banner -->
-			<swiper class="banner" indicator-dots autoplay circular>
-				<swiper-item v-for="(item, index) in banners" :key="index">
-					<image :src="item.image" class="banner-image" mode="aspectFill" />
-				</swiper-item>
-			</swiper>
+  <view class="index">
 
-			<!-- 功能入口 -->
-			<view class="grid">
-				<view class="grid-item" v-for="(item, index) in features" :key="index" @tap="navigateTo(item.url)">
-					<image :src="item.icon" class="icon" />
-					<view class="label">
-						{{ item.name }}
-					</view>
-					<view><text v-if="item.tag" class="tag">{{ item.tag }}</text></view>
-				</view>
-			</view>
-		</view>
+   <view class="banner">
+	 <swiper class="banner" indicator-dots autoplay circular>
+      <swiper-item v-for="(item, index) in banners" :key="index">
+        <image :src="item.image" class="banner-image" mode="aspectFill" />
+      </swiper-item>
+    </swiper>
+   </view>
 
-	</view>
+    <uni-section title="功能入口" type="line">
+      <view class="grid">
+        <view
+          class="grid-item"
+          v-for="(item, index) in features"
+          :key="index"
+          @tap="navigateTo(item.url)"
+        >
+          <image :src="item.icon" class="icon" />
+          <view class="label">{{ item.name }}</view>
+          <view>
+            <text v-if="item.tag" class="tag">{{ item.tag }}</text>
+          </view>
+        </view>
+      </view>
+    </uni-section>
+  </view>
 </template>
 
 <script setup>
-	const banners = [{
-			image: "/static/banner1.jpg",
-		},
-		{
-			image: "/static/banner2.jpg",
-		},
-	];
+const banners = [
+  {
+    image: "/static/banner1.jpg",
+  },
+  {
+    image: "/static/banner2.jpg",
+  },
+];
 
 	const features = [{
 			name: "牛仔对决",
@@ -48,82 +53,88 @@
 		
 	];
 
-	const navigateTo = (url) => {
-		uni.navigateTo({
-			url,
-		});
-	};
+const navigateTo = (url) => {
+  uni.navigateTo({
+    url,
+  });
+};
 </script>
 
 <style scoped lang="scss">
-	.index {
-		position: relative;
-		height: 100vh;
-		width: 100vw;
-	}
+.index {
+  background-color: #f8f8fb;
+  min-height: 100vh;
+  padding: 20px;
+  color: #333;
+  font-family: "PingFang SC", "Helvetica Neue", sans-serif;
+}
 
-	.graph {
-		position: fixed;
-		top: 0;
-		width: 100%;
-		height: 100vh;
-		background-color: rgb(24, 183, 195);
-		z-index: -1;
-	}
+.uni-section {
+  margin-bottom: 24px;
+  background-color: #fff;
+  border-radius: 10px;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.04);
+  padding: 16px;
+  border-left: 6px solid #7f5fff;
+}
 
-	.container {
-		display: flex;
-		flex-direction: column;
-		min-height: 100vh;
-		padding-bottom: 80rpx;
-		/* 预留给 tabBar */
-	}
+.uni-section__title {
+  color: #5e5eac !important;
+  font-weight: bold;
+  font-size: 18px;
+}
 
-	.banner {
-		height: 300rpx;
-	}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220rpx, 1fr));
+  gap: 20px;
+  padding: 10px;
+}
 
-	.banner-image {
-		width: 100%;
-		height: 100%;
-		border-radius: 12rpx;
-	}
+.grid-item {
+  background-color: #ffffff;
+  border-radius: 8rpx;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.1);
+  text-align: center;
+  padding: 20px;
+  transition: all 0.3s;
+}
 
-	.grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(220rpx, 1fr));
-		gap: 30rpx 20rpx;
-		padding: 20rpx;
-	}
+.grid-item:hover {
+  transform: scale(1.02);
+}
 
-	.grid-item {
-		position: relative;
-		background-color: #ffffff;
-		border-radius: 8rpx;
-		box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.1);
-		text-align: center;
-		padding: 20rpx;
-	}
+.icon {
+  width: 96rpx;
+  height: 96rpx;
+  margin: 0 auto 10rpx;
+}
 
-	.icon {
-		width: 96rpx;
-		height: 96rpx;
-		margin: 0 auto 10rpx;
-	}
+.label {
+  color: #333;
+  font-size: 16px;
+  font-weight: bold;
+}
 
-	.label {
-		color: #000000;
-		font-size: 26rpx;
-	}
+.tag {
+  display: inline-block;
+  background-color: #7f5fff;
+  color: #fff;
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-top: 6px;
+}
 
-	.tag {
-		position: absolute;
-		background: #f90;
-		color: #000;
-		font-size: 20rpx;
-		padding: 2rpx 6rpx;
-		border-radius: 6rpx;
-		right: 0;
-		bottom: 0;
-	}
+.banner {
+  height: 300rpx;
+  border-radius: 12rpx;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.1);
+}
+
+.banner-image {
+  width: 100%;
+  height: 100%;
+  border-radius: 12rpx;
+}
 </style>
