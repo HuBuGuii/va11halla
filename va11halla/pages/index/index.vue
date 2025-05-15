@@ -1,14 +1,15 @@
 <template>
   <view class="index">
+    <!-- 顶部 Banner -->
+    <view class="banner">
+      <swiper class="banner" indicator-dots autoplay circular>
+        <swiper-item v-for="(item, index) in banners" :key="index">
+          <image :src="item.image" class="banner-image" mode="widthFix" />
+        </swiper-item>
+      </swiper>
+    </view>
 
-   <view class="banner">
-	 <swiper class="banner" indicator-dots autoplay circular>
-      <swiper-item v-for="(item, index) in banners" :key="index">
-        <image :src="item.image" class="banner-image" mode="aspectFill" />
-      </swiper-item>
-    </swiper>
-   </view>
-
+    <!-- 功能入口 -->
     <uni-section title="功能入口" type="line">
       <view class="grid">
         <view
@@ -31,27 +32,27 @@
 <script setup>
 const banners = [
   {
-    image: "/static/banner1.jpg",
+    image: "https://mp-9aad41c1-5f10-47f1-8cb2-df81014d15d2.cdn.bspapp.com/cloudstorage/bk1.gif",
   },
   {
-    image: "/static/banner2.jpg",
+    image: "https://mp-9aad41c1-5f10-47f1-8cb2-df81014d15d2.cdn.bspapp.com/cloudstorage/bk2.gif",
   },
 ];
 
-	const features = [{
-			name: "牛仔对决",
-			icon: "/static/icons/game.png",
-			url: "/pages/game/cowbay",
-			tag: "NEW",
-		},
-		{
-			name: "AI助手",
-			icon: "/static/icons/chat.png",
-			url: "/pages/chat/index",
-			tag: "NEW",
-		},
-		
-	];
+const features = [
+  {
+    name: "牛仔对决",
+    icon: "https://mp-9aad41c1-5f10-47f1-8cb2-df81014d15d2.cdn.bspapp.com/cloudstorage/97b55ac5-2a9a-49e6-bd56-5cf756ec147e.png",
+    url: "/pages/game/cowbay",
+    tag: "NEW",
+  },
+  {
+    name: "AI助手",
+    icon: "https://mp-9aad41c1-5f10-47f1-8cb2-df81014d15d2.cdn.bspapp.com/cloudstorage/3793c49b-effb-4f0e-b7ef-f04b7eeb43b5.png",
+    url: "/pages/chat/index",
+    tag: "NEW",
+  },
+];
 
 const navigateTo = (url) => {
   uni.navigateTo({
@@ -62,11 +63,24 @@ const navigateTo = (url) => {
 
 <style scoped lang="scss">
 .index {
-  background-color: #f8f8fb;
+  background-color: #f5f3fe; /* 与功能页一致的淡紫色背景 */
   min-height: 100vh;
   padding: 20px;
   color: #333;
   font-family: "PingFang SC", "Helvetica Neue", sans-serif;
+}
+
+.banner {
+  margin-bottom: 20px;
+  border-radius: 12rpx; /* 给整个 banner 区域加圆角 */
+  overflow: hidden; /* 确保超出部分被隐藏 */
+}
+
+.banner-image {
+  width: 100%;
+  height: 100%;
+  border-radius: 12rpx;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.1);
 }
 
 .uni-section {
@@ -124,17 +138,5 @@ const navigateTo = (url) => {
   padding: 2px 6px;
   border-radius: 4px;
   margin-top: 6px;
-}
-
-.banner {
-  height: 300rpx;
-  border-radius: 12rpx;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.1);
-}
-
-.banner-image {
-  width: 100%;
-  height: 100%;
-  border-radius: 12rpx;
 }
 </style>
