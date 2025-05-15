@@ -115,7 +115,8 @@
 		{
 			"path": "pages/chat/deepseek",
 			"style": {
-				"navigationBarTitleText": "deepseek"
+				"navigationBarTitleText": "deepseek",
+				"navigationStyle": "custom" 
 			}
 		},
 		{

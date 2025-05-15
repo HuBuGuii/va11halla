@@ -192,19 +192,21 @@ const getSessions = async () => {
 const openSession = (item) => {
   let id = ''
   let title = item.title
+  let avatar = item.avatar
   if (item.id === 1) {
      id = chatHelper.copySession("68208911652341756270645a");
   }
   if (item.id === 2) {
      id = chatHelper.copySession("68219010b9fb230b03d63ced");
   }
-  uni.navigateTo({ url: `/pages/chat/deepseek?id=${id}&title=${title}` })
+  uni.navigateTo({ url: `/pages/chat/deepseek?id=${id}&title=${title}&avatar=${avatar}` })
 };
 
 const continueSession = (item) => {
   let id = item.id
   let title = item.title
-  uni.navigateTo({ url: `/pages/chat/deepseek?id=${id}&title=${title}` })
+  let avatar = item.avatar
+  uni.navigateTo({ url: `/pages/chat/deepseek?id=${id}&title=${title}&avatar=${avatar}` })
 }
 
 const progress = (e) => {

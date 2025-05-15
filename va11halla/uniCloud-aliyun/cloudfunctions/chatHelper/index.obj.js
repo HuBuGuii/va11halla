@@ -40,12 +40,14 @@ module.exports = {
     return reply.reverse();
   },
   async getPrompt(session_id) {
+    let id = String(session_id)
     const dbJql = uniCloud.databaseForJQL({
       clientInfo: this.getClientInfo(),
     });
-    const res = await dbJql.collection("chat").doc(session_id).get();
+    const res = await dbJql.collection("session").doc(id).get();
+    const prompt = res.data[0].systemText
 
-    console.log(res);
+    return prompt 
   },
   async getMessages({ session_id, limit = 20 }) {
     const dbJql = uniCloud.databaseForJQL({

@@ -45,21 +45,7 @@
 			url: "/pages/chat/index",
 			tag: "NEW",
 		},
-		{
-			name: "排行榜",
-			icon: "/static/icons/rank.png",
-			url: "/pages/rank/index",
-		},
-		{
-			name: "抽卡模拟",
-			icon: "/static/icons/draw.png",
-			url: "/pages/draw/index",
-		},
-		{
-			name: "角色图鉴",
-			icon: "/static/icons/role.png",
-			url: "/pages/role/index",
-		},
+		
 	];
 
 	const navigateTo = (url) => {
