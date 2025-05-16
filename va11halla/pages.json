@@ -2,7 +2,7 @@
 	"pages": [{
 			"path": "pages/index/index",
 			"style": {
-				"navigationBarTitleText": "uni-app"
+				"navigationBarTitleText": "VA11-Hall-A"
 			}
 		},
 		{
@@ -116,14 +116,13 @@
 			"path": "pages/chat/deepseek",
 			"style": {
 				"navigationBarTitleText": "deepseek",
-				"navigationStyle": "custom" 
+				"navigationStyle": "custom"
 			}
 		},
 		{
-			"path" : "pages/chat/index",
-			"style" : 
-			{
-				"navigationBarTitleText" : "ai聊天小助手"
+			"path": "pages/chat/index",
+			"style": {
+				"navigationBarTitleText": "ai聊天小助手"
 			}
 		}
 	],

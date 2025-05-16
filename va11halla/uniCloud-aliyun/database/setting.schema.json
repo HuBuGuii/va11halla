@@ -1,0 +1,40 @@
+{
+	"bsonType": "object",
+	"required": [],
+	"permission": {
+		"read": true,
+		"create": true,
+		"update": true,
+		"delete": true
+	},
+	"properties": {
+		"_id": {
+			"description": "设置ID，系统自动生成"
+		},
+		"user_id": {
+			"bsonType": "string",
+			"description": "用户id",
+			"foreignKey": "uni-id-users._id"
+		},
+		"modelName": {
+			"bsonType": "string",
+			"description": "模型名称"
+		},
+		"temperature": {
+			"bsonType": "number",
+			"description": "随机性"
+		},
+		"maxTokens": {
+			"bsonType": "number",
+			"description": "最大tokens"
+		},
+		"repeat": {
+			"bsonType": "number",
+			"description": "重复度"
+		},
+		"maxMess": {
+			"bsonType": "number",
+			"description": "最长上下文"
+		}
+	}
+}

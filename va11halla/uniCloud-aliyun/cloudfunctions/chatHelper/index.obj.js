@@ -157,7 +157,28 @@ Jill 是个“很酷的调酒师”，但她一直强调自己并没有刻意装
     });
     const toId = copyRes.id
     return toId 
+  },
+  async saveSettings(set,uid){
+    const dbJql = uniCloud.databaseForJQL({
+      clientInfo: this.getClientInfo(),
+    });
 
-    
+    let inid  = String(uid)
+
+    const setting = dbJql.collection("setting")
+    await setting.add({
+      ...set,
+      user_id:inid
+    })
+  },
+  async getSettings(uid){
+     const dbJql = uniCloud.databaseForJQL({
+      clientInfo: this.getClientInfo(),
+    });
+
+    let inid  = String(uid)
+    const reply = await dbJql.collection("setting").where({ user_id: inid }).get()
+
+    return reply.data
   },
 };

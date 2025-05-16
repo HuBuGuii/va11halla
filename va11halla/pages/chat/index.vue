@@ -184,7 +184,6 @@ const rules = {
 const getSessions = async () => {
   const info = uniCloud.getCurrentUserInfo();
   const uid = info.uid;
-  console.log(uid);
   const reply = await chatHelper.getSessions(uid);
   return reply;
 };

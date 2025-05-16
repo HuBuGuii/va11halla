@@ -27,7 +27,7 @@
         </view>
       </view>
     </scroll-view>
-    
+
     <!-- 输入区域 -->
     <view class="input-area">
       <input
@@ -39,8 +39,82 @@
       />
       <button class="send-btn" @click="sendMessage">发送</button>
     </view>
+
+    <view class="settings">
+      <uni-popup ref="settingRef" type="dialog">
+        <view class="insideSetting">
+          <uni-popup-dialog
+            type="info"
+            title="设置"
+            mode="base"
+            @close="closeSetting"
+            @confirm="confirmSetting"
+            :before-close="true"
+          >
+            <uni-forms
+              ref="formRef"
+              :modelValue="formData"
+              class="formClass"
+              label-width="100px"
+              label-position="top"
+              :rules="rules"
+            >
+              <uni-forms-item required label="模型选择" name="modelName">
+                <uni-data-select
+                  v-model="formData.modelName"
+                  :localdata="selectModel"
+                  mode="picker"
+                  clear
+                  selectedColor="#7f5fff"
+                  placeholder="请选择你的模型"
+                />
+              </uni-forms-item>
+              <uni-forms-item required label="随机性" name="temperature">
+                <uni-data-select
+                  v-model="formData.temperature"
+                  :localdata="selectTemperature"
+                  mode="picker"
+                  clear
+                  selectedColor="#7f5fff"
+                  placeholder="请选择输出的随机性"
+                />
+              </uni-forms-item>
+              <uni-forms-item required label="最大输出长度" name="maxTokens">
+                <uni-data-select
+                  v-model="formData.maxTokens"
+                  :localdata="selectMaxtokens"
+                  mode="picker"
+                  clear
+                  selectedColor="#7f5fff"
+                  placeholder="输出越长，等待时间也越长哦"
+                />
+              </uni-forms-item>
+              <uni-forms-item required label="重复内容" name="repeatMes">
+                <uni-data-select
+                  v-model="formData.repeat"
+                  :localdata="selectRepeat"
+                  mode="picker"
+                  clear
+                  selectedColor="#7f5fff"
+                  placeholder="请选择重复内容长度"
+                />
+              </uni-forms-item>
+              <uni-forms-item required label="最长上下文" name="maxMess">
+                <uni-data-select
+                  v-model="formData.maxMess"
+                  :localdata="selectMaxMess"
+                  mode="picker"
+                  clear
+                  selectedColor="#7f5fff"
+                  placeholder="请选择上传的最长上下文"
+                />
+              </uni-forms-item>
+            </uni-forms>
+          </uni-popup-dialog>
+        </view>
+      </uni-popup>
+    </view>
   </view>
-  
 </template>
 
 <script setup lang="ts">
@@ -52,7 +126,16 @@ interface message {
   content: string;
 }
 
+interface formInstance {
+  modelName: string;
+  temperature: number;
+  maxTokens: number;
+  repeat: number;
+  maxMess: number;
+}
+
 const inputText = ref("");
+const uid = ref()
 const messages = ref<message[]>([]);
 const scrollTop = ref(0);
 const prompt = ref("");
@@ -63,16 +146,75 @@ const botAvatar = ref("");
 const inputFocused = ref(true);
 const chatHelper = uniCloud.importObject("chatHelper");
 const session_id = ref("");
-const modelName = ref("deepseek-ai/DeepSeek-V3"); // 或 deepseek-ai/DeepSeek-V3
 const title = ref("");
+const settingRef = ref();
+const formRef = ref();
+const formData = ref<formInstance>({
+  modelName: "deepseek-ai/DeepSeek-V3",
+  temperature: 0.7,
+  maxTokens: 256,
+  repeat: 0.7,
+  maxMess: 15,
+});
+
+const rules = {
+  modelName: {
+    rules: [{ required: true, errorMessage: "请选择模型" }],
+  },
+  temperature: {
+    rules: [{ required: true, errorMessage: "请选择随机性" }],
+  },
+  maxTokens: {
+    rules: [{ required: true, errorMessage: "请选择最大输出长度" }],
+  },
+  repeat: {
+    rules: [{ required: true, errorMessage: "请选择重复内容长度" }],
+  },
+  maxMess: {
+    rules: [{ required: true, errorMessage: "请选择最长上下文" }],
+  },
+};
+
+const selectModel = [
+  { text: "V3 (默认模型)", value: "deepseek-ai/DeepSeek-V3" },
+  { text: "R1 (耗费更大)", value: "deepseek-ai/DeepSeek-R1" },
+];
+
+const selectTemperature = [
+  { text: "很随机", value: 0.9 },
+  { text: "很中立", value: 0.7 },
+  { text: "很保守", value: 0.5 },
+];
+
+const selectMaxtokens = [
+  { text: "比较短", value: 256 },
+  { text: "正常值", value: 512 },
+  { text: "非常长", value: 2048 },
+];
+
+const selectRepeat = [
+  { text: "较少重复（创造）", value: 0.9 },
+  { text: "正常值", value: 0.7 },
+  { text: "较多重复（保守）", value: 0.4 },
+];
+
+const selectMaxMess = [
+  { text: "15条", value: 15 },
+  { text: "30条", value: 30 },
+  {text:"无限条(不推荐)",value:-1}
+];
 
 onLoad(async (options) => {
   title.value = options.title || "聊天";
-  uni.setNavigationBarTitle({ title });
   session_id.value = options.id;
   botAvatar.value = options.avatar;
+  const info = uniCloud.getCurrentUserInfo();
+  uid.value = info.uid
 
   prompt.value = await chatHelper.getPrompt(session_id.value);
+  const set = await chatHelper.getSettings(uid.value)
+  const filteredData = set.map(({ _id, user_id, ...rest }) => rest)
+  formData.value = filteredData?.[0]
 });
 
 // 滚动到底部
@@ -82,9 +224,20 @@ const scrollToBottom = () => {
   });
 };
 
-const openSettings = () => {
+const closeSetting = () => {
+  settingRef.value?.close();
+};
 
-}
+const confirmSetting = () => {
+  
+  chatHelper.saveSettings(formData.value,uid.value)
+  settingRef.value?.close();
+};
+
+const openSettings = () => {
+  settingRef.value?.open("center");
+  console.log(formData.value)
+};
 
 const sendMessage = async () => {
   const text = inputText.value.trim();
@@ -114,17 +267,28 @@ const sendMessage = async () => {
 };
 
 const sendMessageToGPT = async (messages: any[]) => {
-  let sendMes = [
-    { role: "system", content: prompt.value },
-    ...messages.slice(0, -1).map((m) => ({
-      role: m.role,
-      content:
-        typeof m.content === "object" && m.content.value !== undefined
-          ? m.content.value
-          : m.content,
-    })),
+  let sendMes = []
+  const max = formData.value.maxMess
+  const transformedMessages = messages.map((m) => ({
+    role: m.role,
+    content:
+      typeof m.content === "object" && m.content.value !== undefined
+        ? m.content.value
+        : m.content,
+  }));
+  
+   if(max === -1){
+    sendMes = [
+    { role: "system", content: prompt.value }, 
+    ...transformedMessages, 
   ];
-  console.log(sendMes);
+   }else{
+    sendMes = [
+    { role: "system", content: prompt.value }, 
+    ...transformedMessages.slice(-max), 
+  ];
+   }
+
   try {
     const res = await uni.request({
       url: "https://api.siliconflow.cn/v1/chat/completions",
@@ -136,14 +300,14 @@ const sendMessageToGPT = async (messages: any[]) => {
         "Content-Type": "application/json",
       },
       data: {
-        model: modelName.value,
+        model: formData.value.modelName,
         messages: sendMes,
         stream: false,
-        max_tokens: 512,
-        temperature: 0.7,
-        top_p: 0.7,
+        max_tokens: formData.value.maxTokens,
+        temperature: formData.value.temperature,
+        top_p: 0.9,
         top_k: 50,
-        frequency_penalty: 0.5,
+        frequency_penalty: formData.value.repeat,
         n: 1,
         response_format: {
           type: "text",
@@ -163,15 +327,7 @@ const goBack = () => {
   uni.navigateBack({ delta: 1 });
 };
 
-watch(
-  messages,
-  (newVal) => {
-    console.log("新的messages是", newVal);
-  },
-  {
-    deep: true,
-  }
-);
+
 </script>
 
 <style scoped lang="scss">
@@ -330,4 +486,20 @@ page {
     }
   }
 }
+
+.formClass {
+  width: 100%;
+}
+
+:deep(.uni-popup-dialog) {
+  min-width: 320px;
+  width: 80vw;
+  max-width: 650px;
+  background-color: #ffffff;
+  border: 1px solid #dcdcdc;
+  border-radius: 12px;
+  color: #333;
+  font-family: "PingFang SC", "Helvetica Neue", sans-serif;
+}
+
 </style>
