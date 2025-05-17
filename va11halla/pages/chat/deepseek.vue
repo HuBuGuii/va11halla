@@ -135,7 +135,7 @@ interface formInstance {
 }
 
 const inputText = ref("");
-const uid = ref()
+const uid = ref();
 const messages = ref<message[]>([]);
 const scrollTop = ref(0);
 const prompt = ref("");
@@ -147,6 +147,7 @@ const inputFocused = ref(true);
 const chatHelper = uniCloud.importObject("chatHelper");
 const session_id = ref("");
 const title = ref("");
+const limit = ref(15)
 const settingRef = ref();
 const formRef = ref();
 const formData = ref<formInstance>({
@@ -201,7 +202,7 @@ const selectRepeat = [
 const selectMaxMess = [
   { text: "15条", value: 15 },
   { text: "30条", value: 30 },
-  {text:"无限条(不推荐)",value:-1}
+  { text: "无限条(不推荐)", value: -1 },
 ];
 
 onLoad(async (options) => {
@@ -209,12 +210,21 @@ onLoad(async (options) => {
   session_id.value = options.id;
   botAvatar.value = options.avatar;
   const info = uniCloud.getCurrentUserInfo();
-  uid.value = info.uid
+  uid.value = info.uid;
 
   prompt.value = await chatHelper.getPrompt(session_id.value);
-  const set = await chatHelper.getSettings(uid.value)
-  const filteredData = set.map(({ _id, user_id, ...rest }) => rest)
-  formData.value = filteredData?.[0]
+  const set = await chatHelper.getSettings(uid.value);
+  let res = await chatHelper.getMessages({session_id:session_id.value,limit:limit.value})
+  messages.value = res.messages
+  const filteredData = set.map(({ _id, user_id, ...rest }) => rest);
+  formData.value = {
+    modelName: filteredData?.[0]?.modelName || "deepseek-ai/DeepSeek-V3",
+    temperature: filteredData?.[0]?.temperature || 0.7,
+    maxTokens: filteredData?.[0]?.maxTokens || 256,
+    repeat: filteredData?.[0]?.repeat || 0.7,
+    maxMess:filteredData?.[0]?.maxMess || 15
+  };
+  console.log(formData.value)
 });
 
 // 滚动到底部
@@ -229,14 +239,13 @@ const closeSetting = () => {
 };
 
 const confirmSetting = () => {
-  
-  chatHelper.saveSettings(formData.value,uid.value)
+  chatHelper.saveSettings(formData.value, uid.value);
   settingRef.value?.close();
 };
 
 const openSettings = () => {
   settingRef.value?.open("center");
-  console.log(formData.value)
+  console.log(formData.value);
 };
 
 const sendMessage = async () => {
@@ -247,10 +256,11 @@ const sendMessage = async () => {
   // 添加用户消息
   messages.value.push({ role: "user", content: text });
   inputText.value = "";
+  chatHelper.saveMessage({ session_id:session_id.value, role: "user", content: text });
   scrollToBottom();
 
   // 添加机器人“思考中”
-  messages.value.push({ role: "assistant", content: "正在思考中..." });
+  messages.value.push({ role: "assistant", content: "正在思考中...请耐心等待" });
   scrollToBottom();
 
   // 模拟接口回复
@@ -259,6 +269,7 @@ const sendMessage = async () => {
     role: "assistant",
     content: reply,
   };
+  chatHelper.saveMessage({ session_id:session_id.value, role: "assistant", content: reply });
   scrollToBottom();
 
   nextTick(() => {
@@ -267,30 +278,32 @@ const sendMessage = async () => {
 };
 
 const sendMessageToGPT = async (messages: any[]) => {
-  let sendMes = []
-  const max = formData.value.maxMess
-  const transformedMessages = messages.map((m) => ({
+  let sendMes = [] as message[];
+  const max = formData.value.maxMess;
+  const transformedMessages = messages
+  .filter((m) => !(m.role === "assistant" && m.content === "正在思考中...请耐心等待")) 
+  .map((m) => ({
     role: m.role,
     content:
       typeof m.content === "object" && m.content.value !== undefined
         ? m.content.value
         : m.content,
   }));
-  
-   if(max === -1){
-    sendMes = [
-    { role: "system", content: prompt.value }, 
-    ...transformedMessages, 
-  ];
-   }else{
-    sendMes = [
-    { role: "system", content: prompt.value }, 
-    ...transformedMessages.slice(-max), 
-  ];
-   }
 
-  try {
-    const res = await uni.request({
+  if (max === -1) {
+    sendMes = [
+      { role: "system", content: prompt.value },
+      ...transformedMessages,
+    ];
+  } else {
+    sendMes = [
+      { role: "system", content: prompt.value },
+      ...transformedMessages.slice(-max),
+    ];
+  }
+  console.log(sendMes);
+  console.log(formData.value.modelName)
+  const sendRequest = {
       url: "https://api.siliconflow.cn/v1/chat/completions",
       method: "POST",
       header: {
@@ -313,7 +326,11 @@ const sendMessageToGPT = async (messages: any[]) => {
           type: "text",
         },
       },
-    });
+    }
+    
+
+  try {
+    const res = await uni.request(sendRequest);
 
     const reply = res.data?.choices?.[0]?.message?.content || "AI 无回复";
     return reply;
@@ -326,8 +343,6 @@ const sendMessageToGPT = async (messages: any[]) => {
 const goBack = () => {
   uni.navigateBack({ delta: 1 });
 };
-
-
 </script>
 
 <style scoped lang="scss">
@@ -430,6 +445,7 @@ page {
         box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.06);
         position: relative;
         border: 1rpx solid rgba(0, 0, 0, 0.04);
+        user-select: text;
 
         &::after {
           content: "";
@@ -501,5 +517,4 @@ page {
   color: #333;
   font-family: "PingFang SC", "Helvetica Neue", sans-serif;
 }
-
 </style>

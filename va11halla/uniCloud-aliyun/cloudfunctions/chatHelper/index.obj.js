@@ -50,6 +50,8 @@ module.exports = {
     return prompt 
   },
   async getMessages({ session_id, limit = 20 }) {
+    
+    
     const dbJql = uniCloud.databaseForJQL({
       clientInfo: this.getClientInfo(),
     });
