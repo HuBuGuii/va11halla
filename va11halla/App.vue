@@ -14,11 +14,10 @@ export default {
 
 <style>
 /*每个页面公共css */
-* {
-  box-sizing: border-box;
-}
+
 html,
 body {
+   box-sizing: border-box;
   overflow: hidden;
   height: 100%;
   margin: 0;

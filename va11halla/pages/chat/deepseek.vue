@@ -1,7 +1,7 @@
 <template>
   <view class="chat-page">
     <!-- 自定义导航栏 -->
-    <view class="nav-bar">
+    <view class="nav-bar" :style="{paddingTop:statusBar + 'px'}">
       <view class="back-btn" @click="goBack">
         <uni-icons type="left" size="24" color="#333"></uni-icons>
       </view>
@@ -150,6 +150,7 @@ const title = ref("");
 const limit = ref(15)
 const settingRef = ref();
 const formRef = ref();
+const statusBar = ref()
 const formData = ref<formInstance>({
   modelName: "deepseek-ai/DeepSeek-V3",
   temperature: 0.7,
@@ -209,8 +210,11 @@ onLoad(async (options) => {
   title.value = options.title || "聊天";
   session_id.value = options.id;
   botAvatar.value = options.avatar;
-  const info = uniCloud.getCurrentUserInfo();
-  uid.value = info.uid;
+  const info1 = uniCloud.getCurrentUserInfo();
+  uid.value = info1.uid;
+  const info2 = uni.getSystemInfoSync()
+  statusBar.value = info2.statusBarHeight
+
 
   prompt.value = await chatHelper.getPrompt(session_id.value);
   const set = await chatHelper.getSettings(uid.value);
