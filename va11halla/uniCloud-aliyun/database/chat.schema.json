@@ -1,44 +1,45 @@
-// 文档教程: https://uniapp.dcloud.net.cn/uniCloud/schema
 {
-	"bsonType": "object",
-	"required": [],
-	"permission": {
-		"read": true,
-		"create": true,
-		"update": true,
-		"delete": true
-	},
-	"properties": {
-		"_id": {
-			"description": "消息ID，系统自动生成"
-		},
-		"nickname": {
-			"bsonType": "string",
-			"description": "用户的名字"
-		},
-		"user_id": {
-			"bsonType": "string",
-			"description": "用户id",
-			"foreignKey": "uni-id-users._id"
-		},
-		"session_id": {
-			"bsonType": "string",
-			"description": "会话id",
-			"foreignKey": "session._id"
-		},
-		"role": {
-			"bsonType": "string",
-			"description": "确认role"
-		},
-		"content": {
-			"bsonType": "string",
-			"description": "消息的具体内容"
-		},
-		"created_at": {
-			"bsonType": "timestamp",
-			"description": "记录创建时间"
-		}
-
-
-	}
+  "bsonType": "object",
+  "required": [],
+  "permission": {
+    "read": true,
+    "create": true,
+    "update": true,
+    "delete": true
+  },
+  "properties": {
+    "_id": {
+      "description": "message id"
+    },
+    "nickname": {
+      "bsonType": "string",
+      "description": "nickname"
+    },
+    "user_id": {
+      "bsonType": "string",
+      "description": "user id",
+      "foreignKey": "uni-id-users._id"
+    },
+    "session_id": {
+      "bsonType": "string",
+      "description": "session id",
+      "foreignKey": "session._id"
+    },
+    "role": {
+      "bsonType": "string",
+      "description": "message role"
+    },
+    "content": {
+      "bsonType": "string",
+      "description": "message content"
+    },
+    "extra": {
+      "bsonType": "object",
+      "description": "message metadata"
+    },
+    "created_at": {
+      "bsonType": "number",
+      "description": "created time"
+    }
+  }
 }

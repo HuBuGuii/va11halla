@@ -188,24 +188,24 @@ const getSessions = async () => {
   return reply;
 };
 
-const openSession = (item) => {
+const openSession = async (item) => {
   let id = ''
   let title = item.title
   let avatar = item.avatar
   if (item.id === 1) {
-     id = chatHelper.copySession("68208911652341756270645a");
+     id = await chatHelper.copySession("68208911652341756270645a");
   }
   if (item.id === 2) {
-     id = chatHelper.copySession("68219010b9fb230b03d63ced");
+     id = await chatHelper.copySession("68219010b9fb230b03d63ced");
   }
-  uni.navigateTo({ url: `/pages/chat/deepseek?id=${id}&title=${title}&avatar=${avatar}` })
+  uni.navigateTo({ url: `/pages/chatBot/session/index?id=${id}&title=${title}&avatar=${avatar}` })
 };
 
 const continueSession = (item) => {
   let id = item.id
   let title = item.title
   let avatar = item.avatar
-  uni.navigateTo({ url: `/pages/chat/deepseek?id=${id}&title=${title}&avatar=${avatar}` })
+  uni.navigateTo({ url: `/pages/chatBot/session/index?id=${id}&title=${title}&avatar=${avatar}` })
 }
 
 const progress = (e) => {
@@ -239,11 +239,11 @@ const confirmDIY = async () => {
   await formRef.value?.validate();
   console.log(formData.value.imageFiles);
 
-  await chatHelper.createSession(
+  const created = await chatHelper.createSession(
     formData.value.title,
     formData.value.systemText,
     formData.value.showPub,
-    formData.value.imageFiles[0].url
+    formData.value.imageFiles[0]?.url || ""
   );
 
   // 提示成功并关闭弹窗
@@ -252,8 +252,21 @@ const confirmDIY = async () => {
     icon: "success",
   });
 
+  const createdId = created?.id;
+  const title = formData.value.title;
+  const avatar = formData.value.imageFiles[0]?.url || "";
+
   cleanForm();
   diyRef.value?.close();
+
+  const res = await getSessions();
+  list.value = res;
+
+  if (createdId) {
+    uni.navigateTo({
+      url: `/pages/chatBot/session/index?id=${createdId}&title=${title}&avatar=${avatar}`,
+    });
+  }
 };
 
 const closeDIY = () => {

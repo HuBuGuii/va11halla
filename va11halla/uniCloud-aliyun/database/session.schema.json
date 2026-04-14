@@ -1,44 +1,44 @@
 {
-	"bsonType": "object",
-	"required": [],
-	"permission": {
-		"read": true,
-		"create": true,
-		"update": true,
-		"delete": true
-	},
-	"properties": {
-		"_id": {
-			"description": "会话ID，系统自动生成"
-		},
-		"belong": {
-			"bsonType": "string",
-			"description": "所属用户的名字"
-		},
-		"user_id": {
-			"bsonType": "string",
-			"description": "用户id",
-			"foreignKey": "uni-id-users._id"
-		},
-		"systemText": {
-			"bsonType": "string",
-			"description": "自定义提示词"
-		},
-		"showPub": {
-			"bsonType": "string",
-			"description": "用户所选隐私性"
-		},
-		"avatar": {
-			"bsonType": "string",
-			"description": "上传的chat头像"
-		},
-		"title": {
-			"bsonType": "string",
-			"description": "会话标题"
-		},
-		"created_at": {
-			"bsonType": "timestamp",
-			"description": "记录创建时间"
-		}
-	}
+  "bsonType": "object",
+  "required": [],
+  "permission": {
+    "read": true,
+    "create": true,
+    "update": true,
+    "delete": true
+  },
+  "properties": {
+    "_id": {
+      "description": "session id"
+    },
+    "belong": {
+      "bsonType": "string",
+      "description": "owner nickname"
+    },
+    "user_id": {
+      "bsonType": "string",
+      "description": "user id",
+      "foreignKey": "uni-id-users._id"
+    },
+    "systemText": {
+      "bsonType": "string",
+      "description": "system prompt"
+    },
+    "showPub": {
+      "bsonType": "string",
+      "description": "visibility"
+    },
+    "avatar": {
+      "bsonType": "string",
+      "description": "avatar url"
+    },
+    "title": {
+      "bsonType": "string",
+      "description": "session title"
+    },
+    "created_at": {
+      "bsonType": "number",
+      "description": "created time"
+    }
+  }
 }
