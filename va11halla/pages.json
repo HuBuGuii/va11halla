@@ -131,7 +131,7 @@
 		{
 			"path": "pages/chatBot/index/index",
 			"style": {
-				"navigationBarTitleText": "聊天列表"
+				"navigationBarTitleText": "ai聊天小助手"
 			}
 		},
 		{

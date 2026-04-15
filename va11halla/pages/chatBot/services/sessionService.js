@@ -23,3 +23,10 @@ export async function getSessionSettings(uid) {
 export async function saveSessionSettings(settings, uid) {
   return chatHelper.saveSettings(settings, uid);
 }
+
+export async function updateSessionVisibility(sessionId, showPub) {
+  return chatHelper.updateSessionVisibility({
+    session_id: sessionId,
+    showPub,
+  });
+}

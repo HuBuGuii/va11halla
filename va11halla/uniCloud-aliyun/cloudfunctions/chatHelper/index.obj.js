@@ -165,12 +165,20 @@ async function getSessionDetailById(ctx, session_id) {
     title: session.title || "Chat",
     avatar: session.avatar || "",
     systemText: session.systemText || "",
+    personaId: session.persona_id || "",
+    showPub: session.showPub === "public" ? "public" : "private",
   };
 }
 
 async function getRawSessionById(session_id) {
   const db = getRawDb();
   const res = await db.collection("session").doc(String(session_id)).get();
+  return res.data?.[0] || null;
+}
+
+async function getRawPersonaById(persona_id) {
+  const db = getRawDb();
+  const res = await db.collection("persona").doc(String(persona_id)).get();
   return res.data?.[0] || null;
 }
 
@@ -517,6 +525,7 @@ module.exports = {
         id: item._id,
         title: item.title,
         avatar: item.avatar,
+        showPub: item.showPub === "public" ? "Public" : "Private",
       }))
       .reverse();
   },
@@ -566,6 +575,75 @@ module.exports = {
     };
   },
 
+  async getPersonas({ includePrivate = false } = {}) {
+    const dbJql = getDb(this);
+    const user_id = await getCurrentUserIdFromContext(this);
+    const where = includePrivate
+      ? {
+          $or: [{ showPub: "public" }, { user_id }],
+        }
+      : {
+          showPub: "public",
+        };
+
+    const res = await dbJql
+      .collection("persona")
+      .where(where)
+      .orderBy("updated_at", "desc")
+      .get();
+
+    return {
+      code: 0,
+      personas: (res.data || []).map((item) => ({
+        id: item._id,
+        title: item.title || "Persona",
+        avatar: item.avatar || "",
+        description: item.description || "",
+        systemText: item.systemText || "",
+        showPub: item.showPub === "public" ? "public" : "private",
+        tags: Array.isArray(item.tags) ? item.tags : [],
+        belong: item.belong || "",
+      })),
+    };
+  },
+
+  async createPersona({
+    title = "",
+    description = "",
+    systemText = "",
+    showPub = "private",
+    avatar = "",
+    tags = [],
+  } = {}) {
+    const db = getRawDb();
+    const user_id = await getCurrentUserIdFromContext(this);
+    const userRes = await db.collection("uni-id-users").doc(user_id).get();
+    const nickname = userRes.data?.[0]?.nickname || "";
+    const now = Date.now();
+
+    const created = await db.collection("persona").add({
+      user_id,
+      belong: nickname,
+      title: title || "Persona",
+      description: description || "",
+      systemText: systemText || "",
+      showPub: showPub === "public" ? "public" : "private",
+      avatar:
+        avatar ||
+        "https://mp-9aad41c1-5f10-47f1-8cb2-df81014d15d2.cdn.bspapp.com/avatars/jill.png",
+      tags: Array.isArray(tags)
+        ? tags.map((item) => String(item || "").trim()).filter(Boolean).slice(0, 12)
+        : [],
+      created_at: now,
+      updated_at: now,
+    });
+
+    return {
+      code: 0,
+      id: created.id,
+    };
+  },
+
   async createSession(title, systemText, showPub, avatar) {
     try {
       const db = getRawDb();
@@ -577,6 +655,7 @@ module.exports = {
         user_id,
         belong: nickname,
         systemText: systemText || "",
+        persona_id: "",
         showPub,
         avatar:
         avatar ||
@@ -612,6 +691,7 @@ module.exports = {
         user_id,
         belong: nickname,
         systemText: session.systemText || "",
+        persona_id: "",
         showPub: "private",
         avatar: session.avatar || "",
         title: session.title || "Chat",
@@ -621,6 +701,38 @@ module.exports = {
       return copyRes.id;
     } catch (error) {
       throw new Error(`[copySession] ${error?.message || error}`);
+    }
+  },
+
+  async clonePersonaToSession(persona_id, sessionVisibility = "private") {
+    try {
+      const db = getRawDb();
+      const user_id = await getCurrentUserIdFromContext(this);
+      const userRes = await db.collection("uni-id-users").doc(user_id).get();
+      const nickname = userRes.data?.[0]?.nickname || "";
+      const persona = await getRawPersonaById(persona_id);
+
+      if (!persona) {
+        throw new Error(`persona not found: ${persona_id}`);
+      }
+
+      const created = await db.collection("session").add({
+        user_id,
+        belong: nickname,
+        title: persona.title || "Chat",
+        avatar: persona.avatar || "",
+        systemText: persona.systemText || "",
+        persona_id: String(persona._id),
+        showPub: sessionVisibility === "public" ? "public" : "private",
+        created_at: Date.now(),
+      });
+
+      return {
+        code: 0,
+        id: created.id,
+      };
+    } catch (error) {
+      throw new Error(`[clonePersonaToSession] ${error?.message || error}`);
     }
   },
 
@@ -710,6 +822,23 @@ module.exports = {
     const reply = await dbJql.collection("setting").where({ user_id: inid }).get();
 
     return reply.data;
+  },
+
+  async updateSessionVisibility({ session_id, showPub }) {
+    if (!session_id) {
+      throw new Error("session_id is required");
+    }
+
+    const db = getRawDb();
+    await db.collection("session").doc(String(session_id)).update({
+      showPub: showPub === "public" ? "public" : "private",
+    });
+
+    return {
+      code: 0,
+      session_id: String(session_id),
+      showPub: showPub === "public" ? "public" : "private",
+    };
   },
 
   async requestSiliconFlow(messages, options = {}) {

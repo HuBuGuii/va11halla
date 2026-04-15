@@ -24,9 +24,13 @@
       "bsonType": "string",
       "description": "system prompt"
     },
+    "persona_id": {
+      "bsonType": "string",
+      "description": "linked persona id"
+    },
     "showPub": {
       "bsonType": "string",
-      "description": "visibility"
+      "description": "session visibility"
     },
     "avatar": {
       "bsonType": "string",

@@ -100,6 +100,20 @@
                 class="settings-form"
                 label-position="top"
               >
+                <uni-forms-item label="Session Visibility" name="showPub">
+                  <view class="settings-chip-group">
+                    <view
+                      v-for="item in visibilityOptions"
+                      :key="`visibility-${item.value}`"
+                      class="settings-chip"
+                      :class="{ 'is-active': settingsForm.showPub === item.value }"
+                      @click="settingsForm.showPub = item.value"
+                    >
+                      <text class="settings-chip-text">{{ item.text }}</text>
+                    </view>
+                  </view>
+                </uni-forms-item>
+
                 <uni-forms-item label="Recommended" name="recommendedModel">
                   <view class="recommended-models">
                     <view
@@ -259,6 +273,7 @@ import {
   getSessionDetail as fetchSessionDetail,
   getSessionSettings,
   saveSessionSettings,
+  updateSessionVisibility,
 } from "../services/sessionService";
 import { pickAttachments } from "../services/fileService";
 import { getAvailableModels } from "../services/modelService";
@@ -311,6 +326,10 @@ const frequencyPenaltyOptions = [
   { text: "0.8", value: 0.8 },
   { text: "1.0", value: 1 },
 ];
+const visibilityOptions = [
+  { text: "Private", value: "private" },
+  { text: "Public", value: "public" },
+];
 const maxMessageOptions = [
   { text: "6 messages", value: 6 },
   { text: "8 messages", value: 8 },
@@ -341,6 +360,7 @@ const settingsPopupRef = ref(null);
 const settingsFormRef = ref(null);
 const settingsForm = reactive({
   ...DEFAULT_CHAT_SETTINGS,
+  showPub: "private",
 });
 const contextSummary = ref("");
 const compressionState = reactive({
@@ -385,6 +405,7 @@ function normalizeSettings() {
   const normalizedMaxTokens = Number(settingsForm.maxTokens);
   const normalizedMaxMess = Number(settingsForm.maxMess);
   const normalizedFrequencyPenalty = Number(settingsForm.frequencyPenalty);
+  const normalizedShowPub = settingsForm.showPub === "public" ? "public" : "private";
 
   settingsForm.modelName = normalizedModel;
   settingsForm.temperature = temperatureOptions.some((item) => item.value === normalizedTemperature)
@@ -401,6 +422,7 @@ function normalizeSettings() {
   )
     ? normalizedFrequencyPenalty
     : DEFAULT_CHAT_SETTINGS.frequencyPenalty;
+  settingsForm.showPub = normalizedShowPub;
 }
 
 function persistModel(modelName) {
@@ -416,6 +438,7 @@ function persistSettings() {
     maxTokens: Number(settingsForm.maxTokens),
     maxMess: Number(settingsForm.maxMess),
     frequencyPenalty: Number(settingsForm.frequencyPenalty),
+    showPub: settingsForm.showPub,
   };
 
   Object.assign(settingsForm, settingsSnapshot);
@@ -608,6 +631,7 @@ async function loadSessionDetail(options) {
     pageTitle.value = options.title || detail.title || "Chat";
     botAvatar.value = options.avatar || detail.avatar || DEFAULT_BOT_AVATAR;
     sessionSystemText.value = detail.systemText || "";
+    settingsForm.showPub = detail.showPub === "public" ? "public" : "private";
   } catch (error) {
     errorText.value = error?.message || "Failed to load session";
     pageTitle.value = options.title || "Chat";
@@ -712,6 +736,14 @@ function selectRecommendedModel(modelName) {
 
 async function confirmSettings() {
   persistSettings();
+
+  if (sessionId.value) {
+    try {
+      await updateSessionVisibility(sessionId.value, settingsForm.showPub);
+    } catch (error) {
+      console.warn("[chat session] failed to save visibility", error);
+    }
+  }
 
   if (currentUserId.value) {
     try {

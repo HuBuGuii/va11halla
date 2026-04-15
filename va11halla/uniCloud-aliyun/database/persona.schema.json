@@ -1,0 +1,56 @@
+{
+  "bsonType": "object",
+  "required": [],
+  "permission": {
+    "read": true,
+    "create": true,
+    "update": true,
+    "delete": true
+  },
+  "properties": {
+    "_id": {
+      "description": "persona id"
+    },
+    "user_id": {
+      "bsonType": "string",
+      "description": "owner user id",
+      "foreignKey": "uni-id-users._id"
+    },
+    "belong": {
+      "bsonType": "string",
+      "description": "owner nickname"
+    },
+    "title": {
+      "bsonType": "string",
+      "description": "persona title"
+    },
+    "avatar": {
+      "bsonType": "string",
+      "description": "persona avatar url"
+    },
+    "description": {
+      "bsonType": "string",
+      "description": "persona short description"
+    },
+    "systemText": {
+      "bsonType": "string",
+      "description": "persona system prompt"
+    },
+    "showPub": {
+      "bsonType": "string",
+      "description": "persona market visibility"
+    },
+    "tags": {
+      "bsonType": "array",
+      "description": "persona tags"
+    },
+    "created_at": {
+      "bsonType": "number",
+      "description": "created time"
+    },
+    "updated_at": {
+      "bsonType": "number",
+      "description": "updated time"
+    }
+  }
+}
