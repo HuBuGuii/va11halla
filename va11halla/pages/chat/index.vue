@@ -1,7 +1,7 @@
 <template>
   <view class="index">
     <uni-section title="新建对话" type="line">
-      <button class="button" @click="initSession">点我叭</button>
+      <button class="button" @click="initSession">点我呀</button>
       <uni-popup ref="dialogRef" type="dialog">
         <uni-popup-dialog type="info" title="可用ai列表">
           <uni-list>
@@ -72,7 +72,7 @@
                     placeholder="使用过程中不能重复设置"
                   />
                 </uni-forms-item>
-                <uni-forms-item required label="设置私密性" name="showPub">
+                <uni-forms-item required label="设置私密态" name="showPub">
                   <uni-data-checkbox
                     v-model="formData.showPub"
                     :localdata="showPubOptions"
@@ -88,17 +88,18 @@
     </uni-section>
     <uni-section title="对话列表" type="line">
       <view class="content">
-        <view class="text" v-if="list.length === 0"
-          ><text class="highlight">A!O!</text
-          ><text>你还没有和任何ai聊过天呢,点击新建试试</text>
+        <view class="text" v-if="list.length === 0">
+          <text class="highlight">A!O!</text>
+          <text>你还没有和任何ai聊过天呢,点击新建试试</text>
         </view>
         <scroll-view v-else scroll-y class="list-scroll">
-          <uni-list >
+          <uni-list>
             <uni-list-chat
               v-for="item in list"
               :key="item.id"
               :title="item.title"
               :avatar="item.avatar"
+              :rightText="item.showPub"
               clickable
               @click="continueSession(item)"
             />
@@ -110,7 +111,7 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, ref } from "vue";
+import { ref } from "vue";
 import type { ComponentPublicInstance } from "vue";
 import { onLoad } from "@dcloudio/uni-app";
 
@@ -118,17 +119,23 @@ type UniPopupInstance = ComponentPublicInstance & {
   open: (type?: string) => void;
   close: () => void;
 };
+
 type FormRefInstance = ComponentPublicInstance & {
   validate: () => Promise<void>;
 };
+
+interface FileItem {
+  url?: string;
+}
+
 interface FormInstance {
   title: string;
   systemText: string;
   showPub: string;
-  imageFiles: [];
+  imageFiles: FileItem[];
 }
 
-interface listInstance {
+interface ListInstance {
   title: string;
   avatar: string;
   id: string;
@@ -137,7 +144,7 @@ interface listInstance {
 const dialogRef = ref<UniPopupInstance | null>(null);
 const diyRef = ref<UniPopupInstance | null>(null);
 const formRef = ref<FormRefInstance | null>(null);
-const list = ref<listInstance[]>([]);
+const list = ref<ListInstance[]>([]);
 const chatHelper = uniCloud.importObject("chatHelper");
 
 const showPubOptions = [
@@ -189,39 +196,46 @@ const getSessions = async () => {
 };
 
 const openSession = async (item) => {
-  let id = ''
-  let title = item.title
-  let avatar = item.avatar
+  let id = "";
+  const title = item.title;
+  const avatar = item.avatar;
   if (item.id === 1) {
-     id = await chatHelper.copySession("68208911652341756270645a");
+    id = await chatHelper.copySession("68208911652341756270645a");
   }
   if (item.id === 2) {
-     id = await chatHelper.copySession("68219010b9fb230b03d63ced");
+    id = await chatHelper.copySession("68219010b9fb230b03d63ced");
   }
-  uni.navigateTo({ url: `/pages/chatBot/session/index?id=${id}&title=${title}&avatar=${avatar}` })
+  uni.navigateTo({
+    url: `/pages/chatBot/session/index?id=${id}&title=${title}&avatar=${avatar}`,
+  });
 };
 
 const continueSession = (item) => {
-  let id = item.id
-  let title = item.title
-  let avatar = item.avatar
-  uni.navigateTo({ url: `/pages/chatBot/session/index?id=${id}&title=${title}&avatar=${avatar}` })
-}
+  const id = item.id;
+  const title = item.title;
+  const avatar = item.avatar;
+  uni.navigateTo({
+    url: `/pages/chatBot/session/index?id=${id}&title=${title}&avatar=${avatar}`,
+  });
+};
 
 const progress = (e) => {
   console.log("上传进度", e);
 };
-const success = (e) => {
+
+const success = () => {
   console.log("上传成功");
 };
 
 const initSession = () => {
   dialogRef.value?.open("center");
 };
+
 const DIYchat = () => {
   dialogRef.value?.close();
   diyRef.value?.open("center");
 };
+
 const chatMarket = () => {
   console.log("chatmarket");
 };
@@ -237,7 +251,6 @@ const cleanForm = () => {
 
 const confirmDIY = async () => {
   await formRef.value?.validate();
-  console.log(formData.value.imageFiles);
 
   const created = await chatHelper.createSession(
     formData.value.title,
@@ -246,7 +259,6 @@ const confirmDIY = async () => {
     formData.value.imageFiles[0]?.url || ""
   );
 
-  // 提示成功并关闭弹窗
   uni.showToast({
     title: "创建成功",
     icon: "success",
@@ -259,8 +271,7 @@ const confirmDIY = async () => {
   cleanForm();
   diyRef.value?.close();
 
-  const res = await getSessions();
-  list.value = res;
+  list.value = await getSessions();
 
   if (createdId) {
     uni.navigateTo({
@@ -270,14 +281,11 @@ const confirmDIY = async () => {
 };
 
 const closeDIY = () => {
-  console.log("close");
   diyRef.value?.close();
 };
 
-onLoad(async (options) => {
-  const res = await getSessions();
-  list.value = res;
-  console.log(list.value)
+onLoad(async () => {
+  list.value = await getSessions();
 });
 </script>
 
@@ -369,12 +377,14 @@ onLoad(async (options) => {
   color: #5e5eac !important;
   font-weight: bold;
 }
-.content{
+
+.content {
   display: flex;
   flex-direction: column;
-  .list-scroll{
+
+  .list-scroll {
     max-height: 650rpx;
-    flex:1;
+    flex: 1;
     overflow-y: auto;
   }
 }
