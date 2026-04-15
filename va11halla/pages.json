@@ -127,22 +127,6 @@
 			"style": {
 				"navigationBarTitleText": "ai聊天小助手"
 			}
-		},
-		{
-			"path": "pages/chatBot/index/index",
-			"style": {
-				"navigationBarTitleText": "聊天列表"
-			}
-		},
-		{
-			"path": "pages/chatBot/session/index",
-			"style": {
-				"navigationBarTitleText": "聊天",
-				"navigationStyle": "custom",
-				"app-plus": {
-					"softinputMode": "adjustResize"
-				}
-			}
 		}
 	],
 	"globalStyle": {
@@ -157,8 +141,7 @@
 		// #endif
 		"needLogin": [
 			"pages/game/*",
-			"pages/chat/*",
-			"pages/chatBot/*"
+			"pages/chat/*"
 		]
 	}
 }

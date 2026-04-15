@@ -195,6 +195,7 @@ const getSessions = async () => {
   return reply;
 };
 
+<<<<<<< HEAD
 const openSession = async (item) => {
   let id = "";
   const title = item.title;
@@ -218,6 +219,27 @@ const continueSession = (item) => {
     url: `/pages/chatBot/session/index?id=${id}&title=${title}&avatar=${avatar}`,
   });
 };
+=======
+const openSession = (item) => {
+  let id = ''
+  let title = item.title
+  let avatar = item.avatar
+  if (item.id === 1) {
+     id = chatHelper.copySession("68208911652341756270645a");
+  }
+  if (item.id === 2) {
+     id = chatHelper.copySession("68219010b9fb230b03d63ced");
+  }
+  uni.navigateTo({ url: `/pages/chat/deepseek?id=${id}&title=${title}&avatar=${avatar}` })
+};
+
+const continueSession = (item) => {
+  let id = item.id
+  let title = item.title
+  let avatar = item.avatar
+  uni.navigateTo({ url: `/pages/chat/deepseek?id=${id}&title=${title}&avatar=${avatar}` })
+}
+>>>>>>> parent of 713b7a5 (4.14-聊天功能基本完毕)
 
 const progress = (e) => {
   console.log("上传进度", e);
@@ -252,11 +274,11 @@ const cleanForm = () => {
 const confirmDIY = async () => {
   await formRef.value?.validate();
 
-  const created = await chatHelper.createSession(
+  await chatHelper.createSession(
     formData.value.title,
     formData.value.systemText,
     formData.value.showPub,
-    formData.value.imageFiles[0]?.url || ""
+    formData.value.imageFiles[0].url
   );
 
   uni.showToast({
@@ -264,12 +286,9 @@ const confirmDIY = async () => {
     icon: "success",
   });
 
-  const createdId = created?.id;
-  const title = formData.value.title;
-  const avatar = formData.value.imageFiles[0]?.url || "";
-
   cleanForm();
   diyRef.value?.close();
+<<<<<<< HEAD
 
   list.value = await getSessions();
 
@@ -278,6 +297,8 @@ const confirmDIY = async () => {
       url: `/pages/chatBot/session/index?id=${createdId}&title=${title}&avatar=${avatar}`,
     });
   }
+=======
+>>>>>>> parent of 713b7a5 (4.14-聊天功能基本完毕)
 };
 
 const closeDIY = () => {
