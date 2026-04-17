@@ -15,3 +15,12 @@ export async function compressSessionHistory(sessionId, options = {}) {
     options,
   });
 }
+
+export async function getRecommendedEvents(sessionId, options = {}) {
+  const result = await chatHelper.getRecommendedEvents({
+    session_id: sessionId,
+    ...options,
+  });
+
+  return result?.recommendations || [];
+}

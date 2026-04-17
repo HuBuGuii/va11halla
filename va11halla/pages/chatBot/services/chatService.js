@@ -1,7 +1,5 @@
-import { getSessionDetail } from "./sessionService";
 import {
   createLocalMessage,
-  getMessages,
   saveAssistantMessage,
   saveUserMessage,
   sanitizeAttachmentsForStorage,
@@ -14,16 +12,6 @@ import {
   streamChatCompletion,
   DEFAULT_CONTEXT_LIMITS,
 } from "./modelService";
-
-export async function loadSessionContext(sessionId, options = {}) {
-  const detail = await getSessionDetail(sessionId);
-  const messages = await getMessages(sessionId, options.limit || 50);
-
-  return {
-    detail,
-    messages,
-  };
-}
 
 export function buildRequestContext({
   messages,

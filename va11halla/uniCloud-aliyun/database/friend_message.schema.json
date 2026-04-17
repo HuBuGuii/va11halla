@@ -1,0 +1,42 @@
+{
+  "bsonType": "object",
+  "required": [],
+  "permission": {
+    "read": true,
+    "create": true,
+    "update": true,
+    "delete": true
+  },
+  "properties": {
+    "_id": {
+      "description": "friend message id"
+    },
+    "friend_session_id": {
+      "bsonType": "string",
+      "description": "friend session id",
+      "foreignKey": "friend_session._id"
+    },
+    "sender_user_id": {
+      "bsonType": "string",
+      "description": "sender user id",
+      "foreignKey": "uni-id-users._id"
+    },
+    "receiver_user_id": {
+      "bsonType": "string",
+      "description": "receiver user id",
+      "foreignKey": "uni-id-users._id"
+    },
+    "content": {
+      "bsonType": "string",
+      "description": "message content"
+    },
+    "extra": {
+      "bsonType": "object",
+      "description": "attachment or metadata"
+    },
+    "created_at": {
+      "bsonType": "number",
+      "description": "created timestamp"
+    }
+  }
+}

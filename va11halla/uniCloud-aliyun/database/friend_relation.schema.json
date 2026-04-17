@@ -1,0 +1,51 @@
+{
+  "bsonType": "object",
+  "required": [],
+  "permission": {
+    "read": true,
+    "create": true,
+    "update": true,
+    "delete": true
+  },
+  "properties": {
+    "_id": {
+      "description": "relation id"
+    },
+    "user_low": {
+      "bsonType": "string",
+      "description": "normalized smaller user id",
+      "foreignKey": "uni-id-users._id"
+    },
+    "user_high": {
+      "bsonType": "string",
+      "description": "normalized larger user id",
+      "foreignKey": "uni-id-users._id"
+    },
+    "status": {
+      "bsonType": "string",
+      "description": "accepted or blocked"
+    },
+    "created_by": {
+      "bsonType": "string",
+      "description": "creator user id",
+      "foreignKey": "uni-id-users._id"
+    },
+    "last_operator_id": {
+      "bsonType": "string",
+      "description": "last operation user id",
+      "foreignKey": "uni-id-users._id"
+    },
+    "remark": {
+      "bsonType": "string",
+      "description": "optional remark"
+    },
+    "created_at": {
+      "bsonType": "number",
+      "description": "created timestamp"
+    },
+    "updated_at": {
+      "bsonType": "number",
+      "description": "updated timestamp"
+    }
+  }
+}

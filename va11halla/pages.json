@@ -143,6 +143,16 @@
 					"softinputMode": "adjustResize"
 				}
 			}
+		},
+		{
+			"path": "pages/chatBot/friend/index",
+			"style": {
+				"navigationBarTitleText": "好友聊天",
+				"navigationStyle": "custom",
+				"app-plus": {
+					"softinputMode": "adjustResize"
+				}
+			}
 		}
 	],
 	"globalStyle": {

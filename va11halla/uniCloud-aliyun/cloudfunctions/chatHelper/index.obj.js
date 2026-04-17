@@ -1,5 +1,7 @@
 const crypto = require("crypto");
 const uniId = require("uni-id-common");
+const fs = require("fs");
+const path = require("path");
 
 const DEFAULT_CHAT_OPTIONS = {
   modelName: "deepseek-ai/DeepSeek-V3",
@@ -78,6 +80,8 @@ const CORE_EVENT_TYPES = [
 const CORE_EVENT_SCHEMA_VERSION = "v1";
 
 const SILICONFLOW_API_KEY = "sk-lbzbllxviwaybcnynwqpqucqjmkcirhggutrpbqlgaqrphti";
+const NUWA_SKILL_PATH = path.join(__dirname, "skills", "nuwa-skill-main", "SKILL.md");
+let cachedNuwaSkillContext = null;
 
 function normalizeContent(content) {
   if (typeof content === "string") {
@@ -263,6 +267,127 @@ function extractJsonBlock(value = "") {
   }
 
   return raw;
+}
+
+function loadNuwaSkillContext() {
+  if (cachedNuwaSkillContext !== null) {
+    return cachedNuwaSkillContext;
+  }
+
+  try {
+    if (!fs.existsSync(NUWA_SKILL_PATH)) {
+      cachedNuwaSkillContext = "";
+      return cachedNuwaSkillContext;
+    }
+
+    const raw = fs.readFileSync(NUWA_SKILL_PATH, "utf8");
+    const lines = String(raw || "")
+      .split(/\r?\n/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+    const picked = lines
+      .filter((line) =>
+        /心智|模型|启发|表达|反模式|边界|HOW they think|思维|决策/i.test(line)
+      )
+      .slice(0, 36);
+
+    const normalized = picked.length
+      ? picked.join("\n")
+      : String(raw || "").slice(0, 2400);
+    cachedNuwaSkillContext = clipText(normalized, 2400);
+    return cachedNuwaSkillContext;
+  } catch (error) {
+    console.warn("[nuwa skill] failed to load local skill file", error);
+    cachedNuwaSkillContext = "";
+    return cachedNuwaSkillContext;
+  }
+}
+
+function parseOptimizedPromptReply(replyText = "") {
+  const raw = String(replyText || "").trim();
+  if (!raw) {
+    return "";
+  }
+
+  try {
+    const parsed = JSON.parse(extractJsonBlock(raw));
+    return normalizeContent(parsed?.optimized_system_text || parsed?.systemText || "");
+  } catch (error) {
+    return raw.replace(/^```(?:json|markdown)?/i, "").replace(/```$/, "").trim();
+  }
+}
+
+async function optimizePersonaSystemTextWithNuwa({
+  title = "",
+  description = "",
+  systemText = "",
+} = {}) {
+  const cleanSystemText = normalizeContent(systemText);
+  if (!cleanSystemText) {
+    return {
+      optimizedSystemText: "",
+      optimized: false,
+      skillLoaded: false,
+    };
+  }
+
+  const nuwaContext = loadNuwaSkillContext();
+  const systemPrompt = [
+    "You are a persona-system-prompt optimizer.",
+    "Your task is to improve raw persona prompts before they are persisted.",
+    "Apply Nuwa distillation principles:",
+    "1) expression DNA",
+    "2) mental models",
+    "3) decision heuristics",
+    "4) anti-patterns",
+    "5) honest boundaries",
+    "Keep persona identity and user's core intent unchanged.",
+    "Do not output policy text or tool instructions.",
+    "Return strict JSON only: {\"optimized_system_text\":\"...\",\"summary\":\"...\"}.",
+  ].join("\n");
+
+  const payload = {
+    persona_title: String(title || "").trim(),
+    persona_description: String(description || "").trim(),
+    original_system_text: cleanSystemText,
+    nuwa_skill_reference: nuwaContext || "not_loaded",
+    output_requirements: [
+      "Use concise, executable role instructions.",
+      "Include preferred tone and behavior constraints.",
+      "Include explicit boundaries and refusal style.",
+      "Keep language in Chinese if original text is Chinese.",
+      "Length target: 220-800 Chinese chars.",
+    ],
+  };
+
+  const reply = await requestSiliconFlowCompletion(
+    [
+      { role: "system", content: systemPrompt },
+      {
+        role: "user",
+        content: `Optimize this persona prompt as requested:\n${JSON.stringify(payload)}`,
+      },
+    ],
+    {
+      modelName: DEFAULT_CHAT_OPTIONS.modelName,
+      temperature: 0.35,
+      maxTokens: 1800,
+      topP: 0.8,
+      topK: 40,
+      frequencyPenalty: 0.2,
+    }
+  );
+
+  const optimized = parseOptimizedPromptReply(reply);
+  if (!optimized) {
+    throw new Error("optimized persona prompt is empty");
+  }
+
+  return {
+    optimizedSystemText: optimized,
+    optimized: optimized !== cleanSystemText,
+    skillLoaded: Boolean(nuwaContext),
+  };
 }
 
 function normalizeCoreEvent(event = {}) {
@@ -491,6 +616,111 @@ async function getTaskRecord(ctx, taskId) {
   return res.data?.[0] || null;
 }
 
+function normalizeTagSet(memory = {}) {
+  const fromTags = Array.isArray(memory.tags) ? memory.tags : [];
+  const fromInterest = Array.isArray(memory.interest_tags) ? memory.interest_tags : [];
+  const merged = [...fromTags, ...fromInterest]
+    .map((item) => String(item || "").trim())
+    .filter(Boolean);
+  return Array.from(new Set(merged));
+}
+
+function calcJaccardSimilarity(tagsA = [], tagsB = []) {
+  const setA = new Set(tagsA);
+  const setB = new Set(tagsB);
+  if (!setA.size || !setB.size) {
+    return 0;
+  }
+
+  let intersection = 0;
+  for (const value of setA) {
+    if (setB.has(value)) {
+      intersection += 1;
+    }
+  }
+
+  const union = new Set([...setA, ...setB]).size;
+  if (!union) {
+    return 0;
+  }
+
+  return intersection / union;
+}
+
+function selectBestEvent(events = []) {
+  if (!Array.isArray(events) || !events.length) {
+    return null;
+  }
+
+  const ranked = [...events].sort((a, b) => Number(b?.importance || 0) - Number(a?.importance || 0));
+  const picked = ranked[0] || {};
+  return {
+    type: String(picked.type || "fact"),
+    title: clipText(picked.title || picked.summary || "", 80),
+    summary: clipText(picked.summary || picked.title || "", 240),
+  };
+}
+
+function normalizeFriendPair(userA, userB) {
+  const idA = String(userA || "");
+  const idB = String(userB || "");
+  if (!idA || !idB) {
+    throw new Error("invalid friend pair");
+  }
+
+  if (idA === idB) {
+    throw new Error("cannot add self as friend");
+  }
+
+  return idA < idB ? [idA, idB] : [idB, idA];
+}
+
+async function ensureFriendship(db, userA, userB) {
+  const [user_low, user_high] = normalizeFriendPair(userA, userB);
+  const relationRes = await db
+    .collection("friend_relation")
+    .where({
+      user_low,
+      user_high,
+      status: "accepted",
+    })
+    .limit(1)
+    .get();
+
+  return relationRes.data?.[0] || null;
+}
+
+async function ensureFriendSession(db, userA, userB) {
+  const [user_low, user_high] = normalizeFriendPair(userA, userB);
+  const existed = await db
+    .collection("friend_session")
+    .where({ user_low, user_high })
+    .limit(1)
+    .get();
+
+  if (existed.data?.[0]) {
+    return existed.data[0];
+  }
+
+  const now = Date.now();
+  const created = await db.collection("friend_session").add({
+    user_low,
+    user_high,
+    created_at: now,
+    updated_at: now,
+    last_message_at: now,
+  });
+
+  return {
+    _id: created.id,
+    user_low,
+    user_high,
+    created_at: now,
+    updated_at: now,
+    last_message_at: now,
+  };
+}
+
 module.exports = {
   _before() {
     const clientInfo = this.getClientInfo();
@@ -575,6 +805,194 @@ module.exports = {
     };
   },
 
+  async getNuwaSkillStatus() {
+    let exists = false;
+    let size = 0;
+    let skillPath = NUWA_SKILL_PATH;
+
+    try {
+      exists = fs.existsSync(NUWA_SKILL_PATH);
+      if (exists) {
+        size = Number(fs.statSync(NUWA_SKILL_PATH)?.size || 0);
+      }
+    } catch (error) {
+      console.warn("[nuwa skill] status check failed", error);
+    }
+
+    const context = loadNuwaSkillContext();
+    return {
+      code: 0,
+      exists,
+      size,
+      path: skillPath,
+      loadedContextChars: String(context || "").length,
+    };
+  },
+
+  async optimizePersonaSystemText({
+    title = "",
+    description = "",
+    systemText = "",
+  } = {}) {
+    const result = await optimizePersonaSystemTextWithNuwa({
+      title,
+      description,
+      systemText,
+    });
+
+    return {
+      code: 0,
+      optimizedSystemText: result.optimizedSystemText,
+      optimized: result.optimized,
+      skillLoaded: result.skillLoaded,
+    };
+  },
+
+  async getRecommendedEvents({
+    session_id,
+    limit = 5,
+    minSimilarity = 0.35,
+  } = {}) {
+    if (!session_id) {
+      throw new Error("session_id is required");
+    }
+
+    const db = getRawDb();
+    const dbCmd = getDbCommand();
+    const currentUserId = await getCurrentUserIdFromContext(this);
+
+    const targetMemoriesRes = await db
+      .collection("session_memory")
+      .where({
+        session_id: String(session_id),
+        status: "active",
+      })
+      .orderBy("created_at", "desc")
+      .limit(6)
+      .get();
+    const targetMemories = targetMemoriesRes.data || [];
+
+    const targetTagSet = Array.from(
+      new Set(targetMemories.flatMap((item) => normalizeTagSet(item)))
+    );
+    if (!targetTagSet.length) {
+      return {
+        code: 0,
+        recommendations: [],
+      };
+    }
+
+    const candidateRes = await db
+      .collection("session_memory")
+      .where({
+        status: "active",
+        session_type: "public",
+        session_id: dbCmd.neq(String(session_id)),
+        user_id: dbCmd.neq(String(currentUserId)),
+      })
+      .orderBy("created_at", "desc")
+      .limit(240)
+      .get();
+    const candidates = candidateRes.data || [];
+    if (!candidates.length) {
+      return {
+        code: 0,
+        recommendations: [],
+      };
+    }
+
+    const sessionCache = new Map();
+    const personaCache = new Map();
+    const rows = [];
+
+    for (const item of candidates) {
+      const candidateTags = normalizeTagSet(item);
+      const similarity = calcJaccardSimilarity(targetTagSet, candidateTags);
+      if (similarity < Number(minSimilarity)) {
+        continue;
+      }
+
+      const event = selectBestEvent(item.events || []);
+      if (!event || (!event.title && !event.summary)) {
+        continue;
+      }
+
+      let sourceSession = sessionCache.get(String(item.session_id));
+      if (sourceSession === undefined) {
+        sourceSession = await getRawSessionById(item.session_id);
+        sessionCache.set(String(item.session_id), sourceSession || null);
+      }
+
+      let persona = null;
+      const personaId = String(sourceSession?.persona_id || "");
+      if (personaId) {
+        if (personaCache.has(personaId)) {
+          persona = personaCache.get(personaId);
+        } else {
+          persona = await getRawPersonaById(personaId);
+          personaCache.set(personaId, persona || null);
+        }
+      }
+
+      const styleTags = Array.isArray(item.style_tags) ? item.style_tags : [];
+      const styleHint = [
+        persona?.title ? `persona:${persona.title}` : "",
+        styleTags.length ? `style:${styleTags.join("/")}` : "",
+      ]
+        .filter(Boolean)
+        .join(" | ");
+
+      rows.push({
+        id: String(item._id),
+        source_user_id: String(item.user_id || ""),
+        source_session_id: String(item.session_id || ""),
+        similarity: Number(similarity.toFixed(3)),
+        tags: candidateTags,
+        summary_text: String(item.summary_text || ""),
+        style_tags: styleTags,
+        emotion_signals: Array.isArray(item.emotion_signals) ? item.emotion_signals : [],
+        style_hint: styleHint,
+        event,
+      });
+    }
+
+    const dedupByUser = new Map();
+    for (const row of rows.sort((a, b) => b.similarity - a.similarity)) {
+      const key = `${row.source_user_id}#${row.event.title || row.event.summary}`;
+      if (!dedupByUser.has(key)) {
+        dedupByUser.set(key, row);
+      }
+    }
+
+    const picked = Array.from(dedupByUser.values()).slice(0, Math.max(1, Number(limit) || 5));
+    const sourceUserIds = Array.from(new Set(picked.map((item) => item.source_user_id))).filter(Boolean);
+    let userMap = new Map();
+    if (sourceUserIds.length) {
+      const usersRes = await db
+        .collection("uni-id-users")
+        .where({
+          _id: dbCmd.in(sourceUserIds),
+        })
+        .field("_id,nickname,avatar_file")
+        .get();
+      userMap = new Map((usersRes.data || []).map((item) => [String(item._id), item]));
+    }
+
+    const withUserInfo = picked.map((item) => {
+      const userInfo = userMap.get(String(item.source_user_id)) || {};
+      return {
+        ...item,
+        source_user_name: userInfo.nickname || "",
+        source_user_avatar: userInfo.avatar_file?.url || "",
+      };
+    });
+
+    return {
+      code: 0,
+      recommendations: withUserInfo,
+    };
+  },
+
   async getPersonas({ includePrivate = false } = {}) {
     const dbJql = getDb(this);
     const user_id = await getCurrentUserIdFromContext(this);
@@ -614,19 +1032,49 @@ module.exports = {
     showPub = "private",
     avatar = "",
     tags = [],
+    optimizeSystemText = true,
   } = {}) {
     const db = getRawDb();
     const user_id = await getCurrentUserIdFromContext(this);
     const userRes = await db.collection("uni-id-users").doc(user_id).get();
     const nickname = userRes.data?.[0]?.nickname || "";
     const now = Date.now();
+    let finalSystemText = systemText || "";
+    let optimizationInfo = {
+      optimized: false,
+      skillLoaded: false,
+      fallback: false,
+    };
+
+    if (optimizeSystemText && normalizeContent(systemText)) {
+      try {
+        const optimized = await optimizePersonaSystemTextWithNuwa({
+          title,
+          description,
+          systemText,
+        });
+        finalSystemText = optimized.optimizedSystemText || finalSystemText;
+        optimizationInfo = {
+          optimized: Boolean(optimized.optimized),
+          skillLoaded: Boolean(optimized.skillLoaded),
+          fallback: false,
+        };
+      } catch (error) {
+        console.warn("[persona optimize] failed, fallback to raw systemText", error);
+        optimizationInfo = {
+          optimized: false,
+          skillLoaded: Boolean(loadNuwaSkillContext()),
+          fallback: true,
+        };
+      }
+    }
 
     const created = await db.collection("persona").add({
       user_id,
       belong: nickname,
       title: title || "Persona",
       description: description || "",
-      systemText: systemText || "",
+      systemText: finalSystemText || "",
       showPub: showPub === "public" ? "public" : "private",
       avatar:
         avatar ||
@@ -641,6 +1089,7 @@ module.exports = {
     return {
       code: 0,
       id: created.id,
+      optimization: optimizationInfo,
     };
   },
 
@@ -838,6 +1287,285 @@ module.exports = {
       code: 0,
       session_id: String(session_id),
       showPub: showPub === "public" ? "public" : "private",
+    };
+  },
+
+  async addFriend({
+    friend_user_id,
+    remark = "",
+  } = {}) {
+    if (!friend_user_id) {
+      throw new Error("friend_user_id is required");
+    }
+
+    const db = getRawDb();
+    const user_id = await getCurrentUserIdFromContext(this);
+    const [user_low, user_high] = normalizeFriendPair(user_id, friend_user_id);
+    const now = Date.now();
+
+    const existed = await db
+      .collection("friend_relation")
+      .where({ user_low, user_high })
+      .limit(1)
+      .get();
+    const current = existed.data?.[0];
+
+    if (current?._id) {
+      await db.collection("friend_relation").doc(String(current._id)).update({
+        status: "accepted",
+        updated_at: now,
+        last_operator_id: String(user_id),
+        remark: clipText(remark, 80),
+      });
+    } else {
+      await db.collection("friend_relation").add({
+        user_low,
+        user_high,
+        status: "accepted",
+        created_by: String(user_id),
+        last_operator_id: String(user_id),
+        remark: clipText(remark, 80),
+        created_at: now,
+        updated_at: now,
+      });
+    }
+
+    return {
+      code: 0,
+      user_low,
+      user_high,
+      status: "accepted",
+    };
+  },
+
+  async getFriends() {
+    const db = getRawDb();
+    const currentUserId = await getCurrentUserIdFromContext(this);
+    const dbCmd = getDbCommand();
+
+    const relationRes = await db
+      .collection("friend_relation")
+      .where(
+        dbCmd.and([
+          { status: "accepted" },
+          dbCmd.or([
+            { user_low: String(currentUserId) },
+            { user_high: String(currentUserId) },
+          ]),
+        ])
+      )
+      .orderBy("updated_at", "desc")
+      .get();
+    const relations = relationRes.data || [];
+
+    const friendIds = Array.from(
+      new Set(
+        relations.map((item) =>
+          item.user_low === String(currentUserId) ? String(item.user_high) : String(item.user_low)
+        )
+      )
+    );
+
+    if (!friendIds.length) {
+      return {
+        code: 0,
+        friends: [],
+      };
+    }
+
+    const userRes = await db
+      .collection("uni-id-users")
+      .where({
+        _id: dbCmd.in(friendIds),
+      })
+      .field("_id,nickname,avatar_file")
+      .get();
+    const userMap = new Map((userRes.data || []).map((item) => [String(item._id), item]));
+
+    return {
+      code: 0,
+      friends: friendIds.map((friendId) => {
+        const relation = relations.find(
+          (item) => String(item.user_low) === friendId || String(item.user_high) === friendId
+        );
+        const info = userMap.get(friendId) || {};
+        return {
+          user_id: friendId,
+          nickname: info.nickname || "Friend",
+          avatar: info.avatar_file?.url || "",
+          remark: relation?.remark || "",
+          updated_at: Number(relation?.updated_at || 0),
+        };
+      }),
+    };
+  },
+
+  async getOrCreateFriendSession({ friend_user_id } = {}) {
+    if (!friend_user_id) {
+      throw new Error("friend_user_id is required");
+    }
+
+    const db = getRawDb();
+    const currentUserId = await getCurrentUserIdFromContext(this);
+    const relation = await ensureFriendship(db, currentUserId, friend_user_id);
+    if (!relation) {
+      throw new Error("friend relation not found");
+    }
+
+    const session = await ensureFriendSession(db, currentUserId, friend_user_id);
+    return {
+      code: 0,
+      session_id: String(session._id),
+      friend_user_id: String(friend_user_id),
+    };
+  },
+
+  async getFriendMessages({
+    friend_session_id,
+    limit = 50,
+  } = {}) {
+    if (!friend_session_id) {
+      throw new Error("friend_session_id is required");
+    }
+
+    const db = getRawDb();
+    const currentUserId = await getCurrentUserIdFromContext(this);
+    const sessionRes = await db.collection("friend_session").doc(String(friend_session_id)).get();
+    const session = sessionRes.data?.[0];
+    if (!session) {
+      throw new Error("friend session not found");
+    }
+
+    const userLow = String(session.user_low || "");
+    const userHigh = String(session.user_high || "");
+    if (String(currentUserId) !== userLow && String(currentUserId) !== userHigh) {
+      throw new Error("permission denied");
+    }
+
+    const res = await db
+      .collection("friend_message")
+      .where({ friend_session_id: String(friend_session_id) })
+      .orderBy("created_at", "desc")
+      .limit(Math.max(1, Number(limit) || 50))
+      .get();
+    const rows = (res.data || []).reverse();
+
+    return {
+      code: 0,
+      messages: rows,
+      participants: [userLow, userHigh],
+    };
+  },
+
+  async saveFriendMessage({
+    friend_session_id,
+    content,
+    extra = null,
+  } = {}) {
+    const cleanContent = normalizeContent(content);
+    if (!friend_session_id) {
+      throw new Error("friend_session_id is required");
+    }
+    if (!cleanContent) {
+      throw new Error("content is required");
+    }
+
+    const db = getRawDb();
+    const currentUserId = await getCurrentUserIdFromContext(this);
+    const now = Date.now();
+    const sessionRes = await db.collection("friend_session").doc(String(friend_session_id)).get();
+    const session = sessionRes.data?.[0];
+    if (!session) {
+      throw new Error("friend session not found");
+    }
+
+    const userLow = String(session.user_low || "");
+    const userHigh = String(session.user_high || "");
+    if (String(currentUserId) !== userLow && String(currentUserId) !== userHigh) {
+      throw new Error("permission denied");
+    }
+
+    const friend_user_id = String(currentUserId) === userLow ? userHigh : userLow;
+    const created = await db.collection("friend_message").add({
+      friend_session_id: String(friend_session_id),
+      sender_user_id: String(currentUserId),
+      receiver_user_id: String(friend_user_id),
+      content: cleanContent,
+      extra,
+      created_at: now,
+    });
+
+    await db.collection("friend_session").doc(String(friend_session_id)).update({
+      updated_at: now,
+      last_message_at: now,
+      last_message_preview: clipText(cleanContent, 80),
+    });
+
+    return {
+      code: 0,
+      message_id: created.id,
+    };
+  },
+
+  async getFriendSessions() {
+    const db = getRawDb();
+    const dbCmd = getDbCommand();
+    const currentUserId = await getCurrentUserIdFromContext(this);
+
+    const sessionsRes = await db
+      .collection("friend_session")
+      .where(
+        dbCmd.or([
+          { user_low: String(currentUserId) },
+          { user_high: String(currentUserId) },
+        ])
+      )
+      .orderBy("last_message_at", "desc")
+      .get();
+    const sessions = sessionsRes.data || [];
+    const friendIds = Array.from(
+      new Set(
+        sessions.map((item) =>
+          String(item.user_low) === String(currentUserId)
+            ? String(item.user_high)
+            : String(item.user_low)
+        )
+      )
+    );
+
+    if (!friendIds.length) {
+      return {
+        code: 0,
+        sessions: [],
+      };
+    }
+
+    const userRes = await db
+      .collection("uni-id-users")
+      .where({
+        _id: dbCmd.in(friendIds),
+      })
+      .field("_id,nickname,avatar_file")
+      .get();
+    const userMap = new Map((userRes.data || []).map((item) => [String(item._id), item]));
+
+    return {
+      code: 0,
+      sessions: sessions.map((item) => {
+        const friendId =
+          String(item.user_low) === String(currentUserId)
+            ? String(item.user_high)
+            : String(item.user_low);
+        const friendInfo = userMap.get(friendId) || {};
+        return {
+          session_id: String(item._id),
+          friend_user_id: friendId,
+          friend_nickname: friendInfo.nickname || "Friend",
+          friend_avatar: friendInfo.avatar_file?.url || "",
+          last_message_preview: item.last_message_preview || "",
+          last_message_at: Number(item.last_message_at || item.updated_at || 0),
+        };
+      }),
     };
   },
 

@@ -1,86 +1,86 @@
 <template>
-  <view class="index">
-    <uni-section title="新建对话" type="line">
-      <button class="button" @click="initSession">点我呀</button>
+  <view class="index-page">
+    <uni-section title="New Conversation" type="line">
+      <button class="create-btn" @click="openTemplateDialog">Start New Chat</button>
 
       <uni-popup ref="dialogRef" type="dialog">
-        <uni-popup-dialog type="info" title="可用 AI 列表">
+        <uni-popup-dialog type="info" title="Available AI Personas">
           <uni-list>
             <uni-list-chat
-              v-for="item in chatList"
+              v-for="item in featuredPersonas"
               :key="item.id"
               :title="item.title"
               :avatar="item.avatar"
               :note="item.desc"
               clickable
-              @click="openSession(item)"
+              @click="openWithPersona(item)"
             />
 
             <uni-list-item
               clickable
-              @click="DIYchat"
-              title="自定义 AI"
-              note="创建角色模板并立即开始一个新的私有对话"
+              title="Custom AI"
+              note="Create a new persona template and start a private chat."
+              @click="openDIYDialog"
             />
 
             <uni-list-item
               clickable
-              @click="chatMarket"
-              title="公开市场"
-              note="查看所有公开的 AI"
+              title="Public Market"
+              note="Browse all public persona templates."
+              @click="openMarketDialog"
             />
           </uni-list>
         </uni-popup-dialog>
       </uni-popup>
 
       <uni-popup ref="diyRef" type="dialog">
-        <view class="dialogInside1">
+        <view class="diy-panel">
           <uni-popup-dialog
             type="info"
-            title="创建角色模板"
+            title="Create Persona Template"
             mode="base"
-            @close="closeDIY"
-            @confirm="confirmDIY"
             :before-close="true"
+            @close="closeDIYDialog"
+            @confirm="confirmDIY"
           >
-            <view class="diyInside2">
-              <view class="image">
+            <view class="diy-content">
+              <view class="image-picker-wrap">
                 <uni-file-picker
                   v-model="formData.imageFiles"
-                  title="设置头像"
+                  title="Set Avatar"
                   :limit="1"
                   file-mediatype="image"
-                  @progress="progress"
-                  @success="success"
+                  @progress="onUploadProgress"
+                  @success="onUploadSuccess"
                 />
               </view>
 
               <uni-forms
                 ref="formRef"
                 :modelValue="formData"
-                class="formClass"
+                class="diy-form"
                 label-width="100px"
                 label-position="top"
                 :rules="rules"
               >
-                <uni-forms-item required label="设置标题" name="title">
+                <uni-forms-item required label="Template Title" name="title">
                   <uni-easyinput
                     v-model="formData.title"
                     type="text"
-                    placeholder="输入角色模板标题"
+                    placeholder="Enter template title"
                   />
                 </uni-forms-item>
 
-                <uni-forms-item required label="设置提示词" name="systemText">
+                <uni-forms-item required label="System Prompt" name="systemText">
                   <uni-easyinput
                     v-model="formData.systemText"
                     type="textarea"
                     :maxlength="-1"
-                    placeholder="用于定义角色模板的系统提示词"
+                    placeholder="Define persona behavior here"
                   />
                 </uni-forms-item>
 
-                <uni-forms-item required label="模板公开性" name="showPub">
+                <uni-forms-item required label="Template Visibility" name="showPub">
                   <uni-data-checkbox
                     v-model="formData.showPub"
                     :localdata="showPubOptions"
@@ -95,42 +95,38 @@
       </uni-popup>
 
       <uni-popup ref="marketRef" type="dialog">
-        <uni-popup-dialog type="info" title="公开市场">
+        <uni-popup-dialog type="info" title="Public Persona Market">
           <uni-list>
             <uni-list-chat
-              v-for="item in marketList"
+              v-for="item in marketPersonas"
               :key="item.id"
               :title="item.title"
               :avatar="item.avatar"
               :note="item.desc"
               clickable
-              @click="openMarketSession(item)"
+              @click="openMarketPersona(item)"
             />
           </uni-list>
         </uni-popup-dialog>
       </uni-popup>
     </uni-section>
 
-    <uni-section title="对话列表" type="line">
-      <view class="content">
-        <view class="text" v-if="list.length === 0">
-          <text class="highlight">A!O!</text>
-          <text>你还没有和任何 AI 聊过天，点击新建试试。</text>
+    <uni-section title="Session List" type="line">
+      <view class="session-content">
+        <view v-if="sessionList.length === 0" class="empty-state">
+          <text class="empty-highlight">A!O!</text>
+          <text>No chat history yet. Start with a new conversation above.</text>
         </view>
 
-        <scroll-view v-else scroll-y class="list-scroll">
-          <uni-list>
-            <uni-list-item
-              v-for="item in list"
-              :key="item.id"
-              :title="item.title"
-              :thumb="item.avatar"
-              thumb-size="lg"
-              :rightText="item.showPub"
-              clickable
-              @click="continueSession(item)"
-            />
-          </uni-list>
+        <scroll-view v-else scroll-y class="session-scroll">
+          <SessionListItem
+            v-for="item in sessionList"
+            :key="item.id"
+            :title="item.title"
+            :avatar="item.avatar"
+            :show-pub="item.showPub"
+            @click="openSession(item)"
+          />
         </scroll-view>
       </view>
     </uni-section>
@@ -140,7 +136,16 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import type { ComponentPublicInstance } from "vue";
-import { onLoad } from "@dcloudio/uni-app";
+import { onLoad, onShow } from "@dcloudio/uni-app";
+import SessionListItem from "../components/SessionListItem.vue";
+import { getFriendSessions } from "../services/friendService";
+import { getSessions } from "../services/sessionService";
+import {
+  clonePersonaToSession,
+  createPersonaTemplate,
+  getFeaturedPersonas,
+  getPersonas,
+} from "../services/personaService";
 
 type UniPopupInstance = ComponentPublicInstance & {
   open: (type?: string) => void;
@@ -158,40 +163,41 @@ interface FileItem {
 interface FormInstance {
   title: string;
   systemText: string;
-  showPub: string;
+  showPub: "public" | "private";
   imageFiles: FileItem[];
 }
 
-interface ListInstance {
+interface SessionItemInstance {
   title: string;
   avatar: string;
   id: string;
   showPub: string;
+  linkType?: "ai" | "friend";
+  friend_user_id?: string;
 }
 
-interface TemplateChatItem {
+interface PersonaItem {
   id: string;
   title: string;
   avatar: string;
   desc: string;
 }
 
+const FEATURED_PERSONA_TITLES = ["Jill", "Evil-Neuro"];
+
 const dialogRef = ref<UniPopupInstance | null>(null);
 const diyRef = ref<UniPopupInstance | null>(null);
 const marketRef = ref<UniPopupInstance | null>(null);
 const formRef = ref<FormRefInstance | null>(null);
-const list = ref<ListInstance[]>([]);
-const chatHelper = uniCloud.importObject("chatHelper");
+
+const featuredPersonas = ref<PersonaItem[]>([]);
+const marketPersonas = ref<PersonaItem[]>([]);
+const sessionList = ref<SessionItemInstance[]>([]);
 
 const showPubOptions = [
-  { text: "公开", value: "public" },
-  { text: "私人", value: "private" },
-];
-
-const FEATURED_PERSONA_TITLES = ["Jill", "Evil-Neuro"];
-
-const chatList = ref<TemplateChatItem[]>([]);
-const marketList = ref<TemplateChatItem[]>([]);
+  { text: "Public", value: "public" },
+  { text: "Private", value: "private" },
+] as const;
 
 const formData = ref<FormInstance>({
   title: "",
@@ -202,176 +208,282 @@ const formData = ref<FormInstance>({
 
 const rules = {
   showPub: {
-    rules: [{ required: true, errorMessage: "必须确认模板是否公开" }],
+    rules: [{ required: true, errorMessage: "Select template visibility" }],
   },
   title: {
-    rules: [{ required: true, errorMessage: "必须填写标题" }],
+    rules: [{ required: true, errorMessage: "Enter template title" }],
   },
   systemText: {
-    rules: [{ required: true, errorMessage: "必须填写提示词" }],
+    rules: [{ required: true, errorMessage: "Enter system prompt" }],
   },
 };
 
-const getSessions = async () => {
-  const info = uniCloud.getCurrentUserInfo();
-  const uid = info.uid;
-  return await chatHelper.getSessions(uid);
-};
-
-const getFeaturedPersonas = async () => {
-  const res = await chatHelper.getPersonas({ includePrivate: true });
-  const personaMap = new Map(
-    (res?.personas || []).map((item) => [String(item.title || ""), item])
-  );
-
-  chatList.value = FEATURED_PERSONA_TITLES.map((title) => {
-    const item = personaMap.get(title);
-    if (!item) {
-      return null;
-    }
-
-    return {
-      id: String(item.id),
-      title: String(item.title || title),
-      avatar: String(item.avatar || ""),
-      desc: String(item.description || ""),
-    };
-  }).filter(Boolean) as TemplateChatItem[];
-};
-
-const getMarketPersonas = async () => {
-  const res = await chatHelper.getPersonas();
-  marketList.value = (res?.personas || []).map((item) => ({
-    id: String(item.id),
+function mapPersonaList(rows: any[] = []): PersonaItem[] {
+  return rows.map((item) => ({
+    id: String(item.id || ""),
     title: String(item.title || "Persona"),
     avatar: String(item.avatar || ""),
     desc: String(item.description || ""),
   }));
-};
+}
 
-const openSession = async (item: TemplateChatItem) => {
-  const created = await chatHelper.clonePersonaToSession(item.id, "private");
-  const id = created?.id;
-  uni.navigateTo({
-    url: `/pages/chatBot/session/index?id=${id}&title=${encodeURIComponent(
-      item.title
-    )}&avatar=${encodeURIComponent(item.avatar)}`,
-  });
-};
+async function loadFeaturedPersonas() {
+  featuredPersonas.value = await getFeaturedPersonas(FEATURED_PERSONA_TITLES);
+}
 
-const continueSession = (item: ListInstance) => {
-  uni.navigateTo({
-    url: `/pages/chatBot/session/index?id=${item.id}&title=${encodeURIComponent(
-      item.title
-    )}&avatar=${encodeURIComponent(item.avatar)}`,
-  });
-};
+async function loadMarketPersonas() {
+  const rows = await getPersonas();
+  marketPersonas.value = mapPersonaList(rows);
+}
 
-const openMarketSession = async (item: TemplateChatItem) => {
-  const created = await chatHelper.clonePersonaToSession(item.id, "private");
-  const id = created?.id;
-  marketRef.value?.close();
-  uni.navigateTo({
-    url: `/pages/chatBot/session/index?id=${id}&title=${encodeURIComponent(
-      item.title
-    )}&avatar=${encodeURIComponent(item.avatar)}`,
-  });
-};
+async function loadSessionList() {
+  const [aiSessions, friendSessions] = await Promise.all([getSessions(), getFriendSessions()]);
 
-const progress = (e: unknown) => {
-  console.log("上传进度", e);
-};
+  const normalizedFriends: SessionItemInstance[] = (friendSessions || []).map((item: any) => ({
+    id: String(item.session_id || ""),
+    title: String(item.friend_nickname || "Friend"),
+    avatar: String(item.friend_avatar || ""),
+    showPub: "friend",
+    linkType: "friend",
+    friend_user_id: String(item.friend_user_id || ""),
+  }));
 
-const success = () => {
-  console.log("上传成功");
-};
+  const normalizedAi: SessionItemInstance[] = (aiSessions || []).map((item: any) => ({
+    id: String(item.id || item._id || ""),
+    title: String(item.title || "Chat"),
+    avatar: String(item.avatar || ""),
+    showPub: String(item.showPub || "private"),
+    linkType: "ai",
+  }));
 
-const initSession = () => {
-  dialogRef.value?.open("center");
-};
+  sessionList.value = [...normalizedFriends, ...normalizedAi];
+}
 
-const DIYchat = () => {
-  dialogRef.value?.close();
-  if (!formData.value.showPub) {
-    formData.value.showPub = "private";
+async function openWithPersona(item: PersonaItem) {
+  try {
+    const created = await clonePersonaToSession(item.id, "private");
+    const id = created?.id;
+    if (!id) {
+      throw new Error("Failed to create session");
+    }
+
+    uni.navigateTo({
+      url: `/pages/chatBot/session/index?id=${encodeURIComponent(id)}&title=${encodeURIComponent(
+        item.title
+      )}&avatar=${encodeURIComponent(item.avatar)}`,
+    });
+  } catch (error) {
+    showLoadError(error, "Failed to create session");
   }
-  diyRef.value?.open("center");
-};
+}
 
-const chatMarket = () => {
-  dialogRef.value?.close();
-  getMarketPersonas().then(() => {
-    marketRef.value?.open("center");
+function openSession(item: SessionItemInstance) {
+  if (item.showPub === "friend" || item.linkType === "friend") {
+    uni.navigateTo({
+      url: `/pages/chatBot/friend/index?friend_session_id=${encodeURIComponent(
+        item.id
+      )}&friend_user_id=${encodeURIComponent(
+        item.friend_user_id || ""
+      )}&friend_name=${encodeURIComponent(item.title)}&friend_avatar=${encodeURIComponent(
+        item.avatar || ""
+      )}`,
+    });
+    return;
+  }
+
+  uni.navigateTo({
+    url: `/pages/chatBot/session/index?id=${encodeURIComponent(item.id)}&title=${encodeURIComponent(
+      item.title
+    )}&avatar=${encodeURIComponent(item.avatar || "")}`,
   });
-};
+}
 
-const cleanForm = () => {
+async function openMarketPersona(item: PersonaItem) {
+  await openWithPersona(item);
+  marketRef.value?.close();
+}
+
+function resetDIYForm() {
   formData.value = {
     title: "",
     systemText: "",
     showPub: "private",
     imageFiles: [],
   };
-};
+}
 
-const confirmDIY = async () => {
-  await formRef.value?.validate();
+function openTemplateDialog() {
+  dialogRef.value?.open("center");
+}
 
-  const avatar = formData.value.imageFiles[0]?.url || "";
-  const persona = await chatHelper.createPersona({
-    title: formData.value.title,
-    description: formData.value.systemText.slice(0, 60),
-    systemText: formData.value.systemText,
-    showPub: formData.value.showPub,
-    avatar,
-    tags: [],
-  });
-
-  const created = await chatHelper.clonePersonaToSession(persona.id, "private");
-
-  uni.showToast({
-    title: "模板已创建",
-    icon: "success",
-  });
-
-  const createdId = created?.id;
-  const title = formData.value.title;
-
-  cleanForm();
-  diyRef.value?.close();
-
-  list.value = await getSessions();
-
-  if (createdId) {
-    uni.navigateTo({
-      url: `/pages/chatBot/session/index?id=${createdId}&title=${encodeURIComponent(
-        title
-      )}&avatar=${encodeURIComponent(avatar)}`,
-    });
+function openDIYDialog() {
+  dialogRef.value?.close();
+  if (!formData.value.showPub) {
+    formData.value.showPub = "private";
   }
-};
+  diyRef.value?.open("center");
+}
 
-const closeDIY = () => {
+function closeDIYDialog() {
   diyRef.value?.close();
-};
+}
+
+async function openMarketDialog() {
+  try {
+    dialogRef.value?.close();
+    await loadMarketPersonas();
+    marketRef.value?.open("center");
+  } catch (error) {
+    showLoadError(error, "Failed to load market");
+  }
+}
+
+function onUploadProgress(event: unknown) {
+  console.log("[persona upload] progress", event);
+}
+
+function onUploadSuccess() {
+  console.log("[persona upload] success");
+}
+
+async function confirmDIY() {
+  try {
+    await formRef.value?.validate();
+
+    const avatar = formData.value.imageFiles[0]?.url || "";
+    const persona = await createPersonaTemplate({
+      title: formData.value.title,
+      systemText: formData.value.systemText,
+      showPub: formData.value.showPub,
+      avatar,
+      tags: [],
+    });
+
+    const created = await clonePersonaToSession(String(persona?.id || ""), "private");
+    const createdId = created?.id;
+    if (!createdId) {
+      throw new Error("Failed to create new session");
+    }
+
+    uni.showToast({
+      title: "Template created",
+      icon: "success",
+    });
+
+    const title = formData.value.title;
+    resetDIYForm();
+    diyRef.value?.close();
+
+    await loadSessionList();
+
+    uni.navigateTo({
+      url: `/pages/chatBot/session/index?id=${encodeURIComponent(
+        createdId
+      )}&title=${encodeURIComponent(title)}&avatar=${encodeURIComponent(avatar)}`,
+    });
+  } catch (error) {
+    showLoadError(error, "Failed to create template");
+  }
+}
+
+function showLoadError(error: unknown, fallback = "Load failed") {
+  const message = (error as Error)?.message || fallback;
+  uni.showToast({
+    title: message,
+    icon: "none",
+  });
+}
 
 onLoad(async () => {
-  await getFeaturedPersonas();
-  list.value = await getSessions();
+  try {
+    await loadFeaturedPersonas();
+    await loadSessionList();
+  } catch (error) {
+    showLoadError(error, "Initialization failed");
+  }
+});
+
+onShow(async () => {
+  try {
+    await loadSessionList();
+  } catch (error) {
+    showLoadError(error, "Failed to refresh sessions");
+  }
 });
 </script>
 
 <style scoped lang="scss">
+.index-page {
+  min-height: 100vh;
+  padding: 20px;
+  background-color: #f8f8fb;
+  color: #333;
+  font-family: "PingFang SC", "Helvetica Neue", sans-serif;
+}
+
+.create-btn {
+  width: 80%;
+  margin: 20px auto;
+  padding: 12px;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 700;
+  text-align: center;
+  color: #2c2c2c;
+  background: linear-gradient(to right, #c3d9ff, #e2d3ff);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s;
+}
+
+.create-btn:hover {
+  opacity: 0.95;
+  transform: scale(1.02);
+}
+
+.session-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.session-scroll {
+  max-height: 650rpx;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.empty-state {
+  padding: 8rpx 20rpx;
+  font-size: 16px;
+  line-height: 1.6;
+  color: #4a4a4a;
+}
+
+.empty-highlight {
+  display: inline-block;
+  margin-right: 10rpx;
+  font-weight: 700;
+  color: #7f5fff;
+}
+
+.diy-content {
+  width: 95%;
+  padding: 10px 0;
+}
+
+.image-picker-wrap {
+  margin-bottom: 15rpx;
+}
+
 :deep(.uni-popup-dialog) {
   min-width: 320px;
   width: 80vw;
   max-width: 650px;
   overflow: hidden;
-  background-color: #ffffff;
   border: 1px solid #dcdcdc;
   border-radius: 12px;
+  background-color: #ffffff;
   color: #333;
-  font-family: "PingFang SC", "Helvetica Neue", sans-serif;
 }
 
 :deep(.uni-popup-dialog .uni-list),
@@ -407,91 +519,18 @@ onLoad(async () => {
   white-space: nowrap;
 }
 
-.diyInside2 {
-  width: 95%;
-  padding: 10px 0;
-}
-
-.image {
-  margin-bottom: 15rpx;
-}
-
-.button {
-  width: 80%;
-  background: linear-gradient(to right, #c3d9ff, #e2d3ff);
-  border: none;
-  color: #2c2c2c;
-  padding: 12px;
-  border-radius: 12px;
-  text-align: center;
-  margin: 20px auto;
-  font-weight: bold;
-  font-size: 16px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
-  transition: all 0.3s;
-  font-family: "PingFang SC", "Helvetica Neue", sans-serif;
-}
-
-.button:hover {
-  opacity: 0.95;
-  transform: scale(1.02);
-}
-
-.index {
-  background-color: #f8f8fb;
-  min-height: 100vh;
-  padding: 20px;
-  color: #333;
-  font-family: "PingFang SC", "Helvetica Neue", sans-serif;
-}
-
-.text {
-  padding-left: 20rpx;
-  font-size: 16px;
-  line-height: 1.6;
-  color: #4a4a4a;
-}
-
-.text .highlight {
-  display: inline-block;
-  color: #7f5fff;
-  font-weight: bold;
-}
-
-.uni-section {
+:deep(.uni-section) {
   margin-bottom: 24px;
-  background-color: #fff;
-  border-radius: 10px;
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.04);
   padding: 16px;
+  border-radius: 10px;
   border-left: 6px solid #7f5fff;
+  background-color: #fff;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.04);
 }
 
-.uni-section__title {
-  color: #5e5eac !important;
-  font-weight: bold;
+:deep(.uni-section__title) {
   font-size: 18px;
-}
-
-.uni-easyinput__content,
-.uni-data-checklist {
-  padding-left: 20rpx;
-  color: #333 !important;
-}
-
-.uni-list-item__title {
+  font-weight: 700;
   color: #5e5eac !important;
-  font-weight: bold;
-}
-
-.content {
-  display: flex;
-  flex-direction: column;
-
-  .list-scroll {
-    max-height: 650rpx;
-    flex: 1;
-    overflow-y: auto;
-  }
 }
 </style>

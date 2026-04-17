@@ -1,19 +1,13 @@
 ﻿<template>
   <view class="chat-session">
-    <view class="nav-bar" :style="{ paddingTop: `${statusBarHeight}px` }">
-      <view class="nav-btn" @click="goBack">
-        <uni-icons type="left" size="22" color="#1f2937" />
-      </view>
-      <view class="nav-title">
-        <view class="title-group">
-          <text class="title-text">{{ pageTitle }}</text>
-          <text class="model-text">{{ currentModelLabel }}</text>
-        </view>
-      </view>
-      <view class="nav-btn" @click="openModelSelector">
-        <uni-icons type="gear" size="20" color="#1f2937" />
-      </view>
-    </view>
+    <ChatTopBar
+      :status-bar-height="statusBarHeight"
+      :title="pageTitle"
+      :subtitle="currentModelLabel"
+      :show-right="true"
+      @back="goBack"
+      @action="openModelSelector"
+    />
 
     <scroll-view
       v-if="!initialLoading"
@@ -64,6 +58,34 @@
           </text>
         </view>
       </view>
+      <view v-if="recommendedItems.length" class="recommend-list">
+        <view v-for="item in recommendedItems" :key="item.id" class="recommend-card">
+          <view class="recommend-head">
+            <text class="recommend-title">
+              {{ item.source_user_name || item.source_user_id || "Recommended User" }}
+            </text>
+            <text class="recommend-score">{{ (Number(item.similarity || 0) * 100).toFixed(0) }}%</text>
+          </view>
+          <text class="recommend-text">{{ item.event?.title || item.event?.summary || "Event" }}</text>
+          <text class="recommend-sub">{{ item.event?.summary || "" }}</text>
+          <view class="recommend-actions">
+            <button
+              class="recommend-btn secondary"
+              :disabled="isFriend(item.source_user_id)"
+              @click="handleAddFriend(item.source_user_id)"
+            >
+              {{ isFriend(item.source_user_id) ? "Already Friend" : "Add Friend" }}
+            </button>
+            <button
+              class="recommend-btn primary"
+              :disabled="!isFriend(item.source_user_id)"
+              @click="openFriendChat(item)"
+            >
+              Chat
+            </button>
+          </view>
+        </view>
+      </view>
       <view id="message-bottom" class="bottom-anchor"></view>
     </scroll-view>
 
@@ -75,12 +97,7 @@
       <text class="page-state-text">No messages yet. Start the conversation.</text>
     </view>
 
-    <view v-if="errorText" class="error-banner">
-      <text class="error-banner-text">{{ errorText }}</text>
-      <view class="error-close" @click="closeErrorBanner">
-        <uni-icons type="closeempty" size="16" color="#6b7aa6" />
-      </view>
-    </view>
+    <ErrorBanner :text="errorText" @close="closeErrorBanner" />
 
     <view class="settings-layer">
       <uni-popup ref="settingsPopupRef" type="center">
@@ -94,12 +111,7 @@
 
           <view class="settings-body">
             <view class="settings-scroll">
-              <uni-forms
-                ref="settingsFormRef"
-                :modelValue="settingsForm"
-                class="settings-form"
-                label-position="top"
-              >
+              <uni-forms :modelValue="settingsForm" class="settings-form" label-position="top">
                 <uni-forms-item label="Session Visibility" name="showPub">
                   <view class="settings-chip-group">
                     <view
@@ -259,6 +271,8 @@
 <script setup>
 import { computed, nextTick, reactive, ref } from "vue";
 import { onLoad, onShow } from "@dcloudio/uni-app";
+import ChatTopBar from "../components/ChatTopBar.vue";
+import ErrorBanner from "../components/ErrorBanner.vue";
 import { getMessages as getMessageList } from "../services/messageService";
 import {
   buildConversationSummary,
@@ -268,7 +282,9 @@ import {
 import {
   compressSessionHistory,
   getSessionMemories,
+  getRecommendedEvents,
 } from "../services/memoryService";
+import { addFriend, getFriends, getOrCreateFriendSession } from "../services/friendService";
 import {
   getSessionDetail as fetchSessionDetail,
   getSessionSettings,
@@ -351,13 +367,15 @@ const errorText = ref("");
 const scrollIntoView = ref("message-bottom");
 const messages = ref([]);
 const sessionMemories = ref([]);
+const recommendedMemories = ref([]);
+const recommendedItems = ref([]);
+const friendUserIds = ref([]);
 const selectedAttachments = ref([]);
 const hasLoadedOnce = ref(false);
 const currentUserId = ref("");
 const modelsLoading = ref(false);
 const fetchedModels = ref([]);
 const settingsPopupRef = ref(null);
-const settingsFormRef = ref(null);
 const settingsForm = reactive({
   ...DEFAULT_CHAT_SETTINGS,
   showPub: "private",
@@ -560,6 +578,106 @@ async function loadMemories() {
   }
 }
 
+function isFriend(userId) {
+  const id = String(userId || "");
+  return friendUserIds.value.includes(id);
+}
+
+async function loadFriendState() {
+  try {
+    const friends = await getFriends();
+    friendUserIds.value = friends.map((item) => String(item.user_id || ""));
+  } catch (error) {
+    console.warn("[friend] failed to load friend state", error);
+  }
+}
+
+function toRecommendedMemoryBlocks(items = []) {
+  return items.map((item) => {
+    const eventTitle = item?.event?.title || "";
+    const eventSummary = item?.event?.summary || "";
+    const sourceUserId = item?.source_user_id || "";
+    const similarity = Number(item?.similarity || 0);
+    const styleHint = String(item?.style_hint || "").trim();
+    const summaryLines = [
+      `Recommended user: ${sourceUserId}`,
+      `Similarity: ${(similarity * 100).toFixed(1)}%`,
+      eventTitle ? `Event: ${eventTitle}` : "",
+      eventSummary ? `Detail: ${eventSummary}` : "",
+      styleHint ? `Style hint: ${styleHint}` : "",
+    ].filter(Boolean);
+
+    return {
+      summary_text: summaryLines.join("\n"),
+      events: item?.event
+        ? [
+            {
+              type: item.event.type || "fact",
+              title: eventTitle,
+              summary: eventSummary,
+            },
+          ]
+        : [],
+    };
+  });
+}
+
+async function loadRecommendedMemories() {
+  if (!sessionId.value) {
+    return;
+  }
+
+  try {
+    const recommended = await getRecommendedEvents(sessionId.value, {
+      limit: 4,
+      minSimilarity: 0.34,
+    });
+    recommendedItems.value = recommended;
+    recommendedMemories.value = toRecommendedMemoryBlocks(recommended);
+  } catch (error) {
+    console.warn("[chat recommend] failed to load recommendations", error);
+    recommendedItems.value = [];
+    recommendedMemories.value = [];
+  }
+}
+
+async function handleAddFriend(friendUserId) {
+  if (!friendUserId) {
+    return;
+  }
+
+  try {
+    await addFriend(friendUserId);
+    await loadFriendState();
+    uni.showToast({
+      title: "Friend added",
+      icon: "none",
+    });
+  } catch (error) {
+    errorText.value = error?.message || "Failed to add friend";
+  }
+}
+
+async function openFriendChat(item) {
+  const friendUserId = String(item?.source_user_id || "");
+  if (!friendUserId) {
+    return;
+  }
+
+  try {
+    const session = await getOrCreateFriendSession(friendUserId);
+    uni.navigateTo({
+      url: `/pages/chatBot/friend/index?friend_session_id=${encodeURIComponent(
+        session?.session_id || ""
+      )}&friend_user_id=${encodeURIComponent(friendUserId)}&friend_name=${encodeURIComponent(
+        item?.source_user_name || friendUserId
+      )}&friend_avatar=${encodeURIComponent(item?.source_user_avatar || "")}`,
+    });
+  } catch (error) {
+    errorText.value = error?.message || "Failed to open friend chat";
+  }
+}
+
 async function compressHistoryIfNeeded() {
   if (!sessionId.value) {
     return false;
@@ -641,6 +759,7 @@ async function loadSessionDetail(options) {
 
   await loadMessages();
   await loadMemories();
+  await loadRecommendedMemories();
   initialLoading.value = false;
   hasLoadedOnce.value = true;
   scheduleHistoryCompression(600);
@@ -665,7 +784,7 @@ async function handleSend() {
       attachments,
       sessionSystemText: sessionSystemText.value,
       settings: settingsForm,
-      memories: sessionMemories.value,
+      memories: [...recommendedMemories.value, ...sessionMemories.value],
       fetchedModels: fetchedModels.value,
       apiKey: SILICONFLOW_API_KEY,
       apiUrl: SILICONFLOW_API_URL,
@@ -692,6 +811,7 @@ async function handleSend() {
     await persistConversation(sessionId.value, content, attachments, pendingMessage.content);
     contextSummary.value = buildConversationSummary(messages.value, settingsForm);
     scheduleHistoryCompression();
+    loadRecommendedMemories();
   } catch (error) {
     const pendingMessage = messages.value[messages.value.length - 1];
     if (pendingMessage?.role === "assistant" && !pendingMessage.content) {
@@ -772,13 +892,19 @@ async function confirmSettings() {
 }
 
 function goBack() {
-  uni.navigateBack({
-    delta: 1,
+  uni.reLaunch({
+    url: "/pages/chatBot/index/index",
+    fail: () => {
+      uni.navigateBack({
+        delta: 1,
+      });
+    },
   });
 }
 
 onLoad(async (options) => {
   await loadSettings();
+  await loadFriendState();
   fetchModels();
   await loadSessionDetail(options || {});
 });
@@ -789,6 +915,7 @@ onShow(async () => {
   }
 
   await loadMessages();
+  await loadRecommendedMemories();
 });
 </script>
 
@@ -811,58 +938,6 @@ page {
     radial-gradient(circle at top left, rgba(198, 230, 255, 0.46), transparent 26%),
     linear-gradient(180deg, #fdfefe 0%, #f3f9ff 48%, #fff7fc 100%);
   color: #2f3952;
-}
-
-.nav-bar {
-  display: flex;
-  align-items: center;
-  flex-shrink: 0;
-  height: 88rpx;
-  padding-left: 24rpx;
-  padding-right: 24rpx;
-  background: rgba(255, 255, 255, 0.88);
-  border-bottom: 1px solid rgba(163, 196, 255, 0.2);
-  backdrop-filter: blur(14rpx);
-}
-
-.nav-btn {
-  width: 60rpx;
-  height: 60rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.nav-btn-placeholder {
-  opacity: 0;
-}
-
-.nav-title {
-  flex: 1;
-  display: flex;
-  justify-content: center;
-  padding: 0 12rpx;
-}
-
-.title-group {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.title-text {
-  max-width: 420rpx;
-  font-size: 32rpx;
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.model-text {
-  margin-top: 4rpx;
-  font-size: 20rpx;
-  color: #7b8ec8;
 }
 
 .message-list {
@@ -1040,37 +1115,6 @@ page {
 
 .error-text {
   color: #d25d92;
-}
-
-.error-banner {
-  flex-shrink: 0;
-  position: relative;
-  margin: 0 24rpx 16rpx;
-  padding: 18rpx 54rpx 18rpx 20rpx;
-  border-radius: 18rpx;
-  background: linear-gradient(135deg, rgba(255, 235, 244, 0.96), rgba(237, 246, 255, 0.96));
-  color: #5e6e98;
-  font-size: 24rpx;
-  border: 1px solid rgba(187, 205, 255, 0.45);
-  box-shadow: 0 10rpx 24rpx rgba(132, 157, 213, 0.12);
-}
-
-.error-banner-text {
-  display: block;
-  line-height: 1.5;
-}
-
-.error-close {
-  position: absolute;
-  top: 12rpx;
-  right: 12rpx;
-  width: 40rpx;
-  height: 40rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.72);
 }
 
 .settings-form {
@@ -1409,6 +1453,82 @@ page {
 
 .ghost-btn[disabled] {
   opacity: 0.65;
+}
+
+.recommend-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14rpx;
+  margin: 8rpx 0 12rpx;
+}
+
+.recommend-card {
+  margin-left: 90rpx;
+  padding: 18rpx 20rpx;
+  border-radius: 20rpx;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(186, 208, 255, 0.42);
+  box-shadow: 0 8rpx 18rpx rgba(132, 157, 213, 0.1);
+}
+
+.recommend-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12rpx;
+}
+
+.recommend-title {
+  font-size: 24rpx;
+  font-weight: 600;
+  color: #52679f;
+}
+
+.recommend-score {
+  font-size: 22rpx;
+  color: #7f8fb3;
+}
+
+.recommend-text {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 28rpx;
+  line-height: 1.5;
+  color: #3a4d78;
+}
+
+.recommend-sub {
+  display: block;
+  margin-top: 6rpx;
+  font-size: 24rpx;
+  line-height: 1.5;
+  color: #7b8ec8;
+}
+
+.recommend-actions {
+  margin-top: 12rpx;
+  display: flex;
+  gap: 12rpx;
+}
+
+.recommend-btn {
+  flex: 1;
+  height: 64rpx;
+  line-height: 64rpx;
+  border-radius: 16rpx;
+  font-size: 24rpx;
+}
+
+.recommend-btn.primary {
+  border: none;
+  background: linear-gradient(135deg, #86c9ff 0%, #f6a8d6 100%);
+  color: #fff;
+}
+
+.recommend-btn.secondary {
+  border: 1px solid rgba(174, 201, 255, 0.6);
+  background: rgba(255, 255, 255, 0.92);
+  color: #6b7ec0;
 }
 
 .bottom-anchor {
